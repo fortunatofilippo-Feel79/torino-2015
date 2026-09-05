@@ -43,8 +43,8 @@
      =================================================================== -->
 <script>
 window.CONFIG = {
-  SUPABASE_URL: "",
-  SUPABASE_ANON_KEY: "",
+  SUPABASE_URL: "https://wsedwqqqagmfuciuxiix.supabase.co",
+  SUPABASE_ANON_KEY: "sb_publishable_WDWlGh3x6YM7SBoVD0x1vw_SXd7LBm1",
   SQUADRA_ID: "2015"
 };
 </script>
@@ -2662,7 +2662,10 @@ function Team({
     onClick: () => {
       localStorage.setItem(KKEY, chiave);
       setAdmin(!!chiave);
-      setMsg(chiave ? "Modalità modifica attiva." : "Modalità sola lettura.");
+      if (chiave) setDb({
+        ...db
+      });
+      setMsg(chiave ? "Modalità modifica attiva. Dati inviati online." : "Modalità sola lettura.");
     }
   }, admin ? "Aggiorna chiave" : "Attiva la modifica")), msg && /*#__PURE__*/React.createElement("div", {
     style: {
