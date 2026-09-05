@@ -2534,7 +2534,8 @@ function Team({
   setDb,
   admin,
   setAdmin,
-  stato
+  stato,
+  sincronizza
 }) {
   const [name, setName] = useState("");
   const [imp, setImp] = useState(false);
@@ -2633,15 +2634,29 @@ function Team({
     style: {
       width: "100%"
     },
-    onClick: () => {
+    onClick: async () => {
       localStorage.setItem(KKEY, chiave);
       setAdmin(!!chiave);
-      if (chiave) setDb({
-        ...db
-      });
-      setMsg(chiave ? "Modalità modifica attiva. Dati inviati online." : "Modalità sola lettura.");
+      if (!chiave) {
+        setMsg("Modalità sola lettura.");
+        return;
+      }
+      setMsg("Invio in corso…");
+      const r = await sincronizza();
+      setMsg(r === "ok" ? "Modifica attiva. Dati caricati sul server." : "Chiave salvata, ma il caricamento NON è riuscito: " + r);
     }
-  }, admin ? "Aggiorna chiave" : "Attiva la modifica")), msg && /*#__PURE__*/React.createElement("div", {
+  }, admin ? "Aggiorna chiave" : "Attiva la modifica"), admin && /*#__PURE__*/React.createElement("div", {
+    className: "mt2"
+  }, /*#__PURE__*/React.createElement(Btn, {
+    style: {
+      width: "100%"
+    },
+    onClick: async () => {
+      setMsg("Invio in corso…");
+      const r = await sincronizza();
+      setMsg(r === "ok" ? "Dati caricati sul server adesso." : "Caricamento NON riuscito: " + r);
+    }
+  }, "Invia i dati al server adesso"))), msg && /*#__PURE__*/React.createElement("div", {
     style: {
       color: C.gr,
       fontSize: 14,
@@ -2820,6 +2835,19 @@ function App() {
     matches: db.matches.filter(m => m.id !== id)
   });
   const live = db.matches.find(m => m.status === "live");
+  async function sincronizza() {
+    if (!cloud) return "Il file non ha la configurazione del server.";
+    const k = localStorage.getItem(KKEY) || "";
+    if (!k) return "Manca la chiave di scrittura.";
+    try {
+      await cloudSave(db, k);
+      setPending(false);
+      return "ok";
+    } catch (e) {
+      setPending(true);
+      return e.message || "errore sconosciuto";
+    }
+  }
   const ultima = (() => {
     const ms = [...db.matches].sort((x, y) => x.date < y.date ? 1 : -1);
     const l = ms[0];
@@ -2959,7 +2987,8 @@ function App() {
     setDb: setDb,
     admin: admin,
     setAdmin: setAdmin,
-    stato: stato
+    stato: stato,
+    sincronizza: sincronizza
   });
   return /*#__PURE__*/React.createElement("div", {
     style: {
