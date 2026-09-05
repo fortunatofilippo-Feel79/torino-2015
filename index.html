@@ -36,6 +36,19 @@
   }
   .printonly { display:none; }
 </style>
+
+<!-- ===================================================================
+     CONFIGURAZIONE — le uniche righe da modificare in tutto il file.
+     Lasciandole vuote l'app funziona solo su questo telefono.
+     =================================================================== -->
+<script>
+window.CONFIG = {
+  SUPABASE_URL: "",
+  SUPABASE_ANON_KEY: "",
+  SQUADRA_ID: "2015"
+};
+</script>
+
 </head>
 <body>
 <div id="root"></div>
@@ -353,11 +366,9 @@ function(a,b,c){if(!Vd(b))throw Error(n(200));return Wd(null,a,b,!1,c)};Q.unmoun
    Lasciandole vuote l'app funziona lo stesso, ma solo su questo
    telefono e senza visibilità per i genitori.
    ============================================================ */
-const CONFIG = {
+const CONFIG = window.CONFIG || {
   SUPABASE_URL: "",
-  // es. https://abcdxyz.supabase.co
   SUPABASE_ANON_KEY: "",
-  // la chiave "anon public" del progetto
   SQUADRA_ID: "2015"
 };
 const CLUB = "Torino Club MP";
@@ -410,6 +421,24 @@ const cap = s => s ? s[0].toUpperCase() + s.slice(1) : s;
 const typeOf = m => TYPES.find(t => t.id === m.type) || TYPES[0];
 const typeLabel = m => m.type === "torneo" ? m.tournament || "Torneo" : typeOf(m).label;
 const vuoto = x => !x || (x.roster || []).length === 0 && (x.matches || []).length === 0;
+const secNow = (m, p) => {
+  const c = (m.clocks || {})[p] || {
+    el: 0,
+    st: null
+  };
+  return Math.max(0, Math.round(c.el + (c.st ? (Date.now() - c.st) / 1000 : 0)));
+};
+const inCampo = (m, pid, p) => (m.stints || []).some(x => x.pid === pid && x.p === p && x.to == null);
+const secGiocati = (m, pid) => {
+  let t = 0;
+  for (const x of m.stints || []) if (x.pid === pid) t += (x.to == null ? secNow(m, x.p) : x.to) - x.from;
+  return Math.max(0, t);
+};
+const mmss = t => Math.floor(t / 60) + ":" + String(Math.floor(t % 60)).padStart(2, "0");
+const minutiPartita = (m, pid) => {
+  if ((m.stints || []).length) return secGiocati(m, pid) / 60;
+  return ((m.lineup || {})[pid] || []).length * (m.durata || 15); // partite vecchie, senza cronometro
+};
 const scoreOf = m => {
   let u = 0,
     t = 0;
@@ -462,6 +491,32 @@ function localSave(db) {
     localStorage.setItem(LKEY, JSON.stringify(db));
   } catch (e) {}
 }
+async function condividiPNG(dataUrl, nome, titolo) {
+  if (!dataUrl) return;
+  try {
+    const blob = await (await fetch(dataUrl)).blob();
+    const file = new File([blob], nome, {
+      type: "image/png"
+    });
+    if (navigator.canShare && navigator.canShare({
+      files: [file]
+    })) {
+      await navigator.share({
+        files: [file],
+        title: titolo
+      });
+      return;
+    }
+  } catch (e) {}
+  try {
+    const a = document.createElement("a");
+    a.href = dataUrl;
+    a.download = nome;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => document.body.removeChild(a), 1500);
+  } catch (e) {}
+}
 function download(content, filename, type) {
   const url = URL.createObjectURL(new Blob([content], {
     type
@@ -510,17 +565,21 @@ function computeStats(roster, matches) {
   const done = matches.filter(m => m.status === "done");
   const per = roster.map(p => {
     let tempi = 0,
+      minuti = 0,
       gol = 0,
       presenze = 0,
       convocazioni = 0,
-      disponibili = 0;
+      dispTempi = 0,
+      dispMin = 0;
     for (const m of done) {
       if (!m.squad.includes(p.id)) continue;
       convocazioni++;
-      disponibili += m.periods;
+      dispTempi += m.periods;
+      dispMin += m.periods * (m.durata || 15);
       const t = (m.lineup[p.id] || []).length;
       if (t > 0) presenze++;
       tempi += t;
+      minuti += minutiPartita(m, p.id);
       gol += m.goals.filter(g => g.playerId === p.id).length;
     }
     return {
@@ -528,10 +587,11 @@ function computeStats(roster, matches) {
       presenze,
       convocazioni,
       tempi,
-      disponibili,
-      gol,
-      impiego: disponibili ? Math.round(tempi / disponibili * 100) : 0,
-      mediaTempi: presenze ? tempi / presenze : 0
+      minuti: Math.round(minuti),
+      dispTempi,
+      dispMin,
+      impiego: dispMin ? Math.round(minuti / dispMin * 100) : 0,
+      mediaMin: presenze ? minuti / presenze : 0
     };
   });
   const byType = {};
@@ -539,7 +599,7 @@ function computeStats(roster, matches) {
     gs = 0,
     v = 0,
     n = 0,
-    s = 0;
+    s2 = 0;
   for (const t of TYPES) byType[t.id] = {
     v: 0,
     n: 0,
@@ -561,7 +621,7 @@ function computeStats(roster, matches) {
       v++;
     } else if (o === "P") {
       b.p++;
-      s++;
+      s2++;
     } else {
       b.n++;
       n++;
@@ -575,7 +635,7 @@ function computeStats(roster, matches) {
     gs,
     v,
     n,
-    s
+    s: s2
   };
 }
 
@@ -806,7 +866,8 @@ function ConvForm({
   roster,
   initial,
   onSave,
-  onBack
+  onBack,
+  ultima
 }) {
   const today = new Date().toISOString().slice(0, 10);
   const [m, setM] = useState(initial || {
@@ -822,7 +883,7 @@ function ConvForm({
     notes: "",
     periods: 3,
     cur: 1,
-    squad: roster.map(p => p.id),
+    squad: ultima && ultima.ids.length ? ultima.ids : roster.map(p => p.id),
     lineup: {},
     goals: [],
     status: "convocata"
@@ -935,7 +996,34 @@ function ConvForm({
     placeholder: "parastinchi, borraccia, tessera sanitaria…"
   })), /*#__PURE__*/React.createElement(Field, {
     label: `Convocati (${m.squad.length} di ${roster.length})`
-  }, /*#__PURE__*/React.createElement(SquadPicker, {
+  }, !initial && ultima && ultima.ids.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 12,
+      marginBottom: 8
+    }
+  }, "Ripresi dall'ultima convocazione", ultima.opponent ? " contro " + ultima.opponent : "", ultima.date ? " del " + fmtDate(ultima.date) : "", ". Cambia solo chi serve."), /*#__PURE__*/React.createElement("div", {
+    className: "flex gap2",
+    style: {
+      marginBottom: 8
+    }
+  }, /*#__PURE__*/React.createElement(Btn, {
+    tone: "ghost",
+    onClick: () => set("squad", roster.map(p => p.id)),
+    style: {
+      flex: 1,
+      padding: "8px 0",
+      fontSize: 13
+    }
+  }, "Tutti"), /*#__PURE__*/React.createElement(Btn, {
+    tone: "ghost",
+    onClick: () => set("squad", []),
+    style: {
+      flex: 1,
+      padding: "8px 0",
+      fontSize: 13
+    }
+  }, "Nessuno")), /*#__PURE__*/React.createElement(SquadPicker, {
     roster: roster,
     squad: m.squad,
     setSquad: s => set("squad", s)
@@ -965,25 +1053,27 @@ function ConvDetail({
   const [img, setImg] = useState("");
   const [ask, setAsk] = useState(false);
   const [periods, setPeriods] = useState(match.periods || 3);
+  const [durata, setDurata] = useState(match.durata || 15);
   const cv = useRef(null);
   const players = roster.filter(p => match.squad.includes(p.id));
   const text = buildText(match, roster);
   useEffect(() => {
     const im = new Image();
     im.onload = () => render(im);
-    im.onerror = () => render(null);
+    im.onerror = () => {};
     im.src = LOGO;
+    render(null);
     function render(logo) {
       const c = cv.current;
       if (!c) return;
       const W = 1080,
         rows = Math.ceil(players.length / 2);
-      const Hh = 900 + rows * 64 + (match.notes ? 150 : 0) + (match.address ? 50 : 0);
+      const Hh = 830 + rows * 64 + (match.notes ? 170 : 0) + (match.address ? 46 : 0);
       c.width = W;
       c.height = Hh;
       const x = c.getContext("2d");
       if (!x) return;
-      const F = (s, w = 400) => `${w} ${s}px ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif`;
+      const F = (s, w = 400) => `${w} ${s}px Helvetica,Arial,sans-serif`;
       x.fillStyle = "#fff";
       x.fillRect(0, 0, W, Hh);
       x.fillStyle = C.gr;
@@ -1093,23 +1183,10 @@ function ConvDetail({
   }, /*#__PURE__*/React.createElement(Btn, {
     tone: "solid",
     onClick: copy
-  }, copied ? "Copiato" : "Copia testo"), img ? /*#__PURE__*/React.createElement("a", {
-    href: img,
-    download: `convocazione-${match.date}.png`,
-    style: {
-      background: "#fff",
-      color: C.txt,
-      border: "1px solid " + C.line,
-      borderRadius: 10,
-      padding: "12px 14px",
-      fontSize: 15,
-      fontWeight: 600,
-      textAlign: "center",
-      textDecoration: "none"
-    }
-  }, "Scarica immagine") : /*#__PURE__*/React.createElement(Btn, {
-    disabled: true
-  }, "Immagine…")), /*#__PURE__*/React.createElement("canvas", {
+  }, copied ? "Copiato" : "Copia testo"), /*#__PURE__*/React.createElement(Btn, {
+    disabled: !img,
+    onClick: () => condividiPNG(img, `convocazione-${match.date}.png`, "Convocazione")
+  }, img ? "Invia immagine" : "Preparo l'immagine…")), /*#__PURE__*/React.createElement("canvas", {
     ref: cv,
     style: {
       width: "100%",
@@ -1135,14 +1212,14 @@ function ConvDetail({
     }
   }, "Inizia la partita")))), ask && /*#__PURE__*/React.createElement(Sheet, {
     onClose: () => setAsk(false),
-    title: "Quanti tempi si gioca?"
+    title: "Come si gioca oggi?"
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       color: C.dim,
       fontSize: 13,
-      marginBottom: 12
+      marginBottom: 8
     }
-  }, "Puoi cambiarlo anche a gara iniziata."), /*#__PURE__*/React.createElement(Seg, {
+  }, "Numero di tempi"), /*#__PURE__*/React.createElement(Seg, {
     options: [2, 3, 4].map(n => ({
       v: n,
       l: `${n} tempi`
@@ -1150,10 +1227,29 @@ function ConvDetail({
     value: periods,
     onChange: setPeriods
   }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 13,
+      margin: "18px 0 8px"
+    }
+  }, "Durata di ogni tempo"), /*#__PURE__*/React.createElement(Seg, {
+    options: [10, 15, 20, 25].map(n => ({
+      v: n,
+      l: `${n}′`
+    })),
+    value: durata,
+    onChange: setDurata
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 12,
+      marginTop: 12
+    }
+  }, "Puoi cambiare entrambi anche a gara iniziata."), /*#__PURE__*/React.createElement("div", {
     className: "mt4"
   }, /*#__PURE__*/React.createElement(Btn, {
     tone: "solid",
-    onClick: () => onStart(periods),
+    onClick: () => onStart(periods, durata),
     style: {
       width: "100%",
       padding: "16px 0"
@@ -1173,35 +1269,199 @@ function LiveMatch({
 }) {
   const [picker, setPicker] = useState(false);
   const [settings, setSettings] = useState(false);
+  const [cambio, setCambio] = useState(false);
+  const [esce, setEsce] = useState(null);
+  const [entra, setEntra] = useState(null);
+  const [ultimo, setUltimo] = useState("");
+  const [, tick] = useState(0);
   const period = match.cur || 1;
+  const durata = match.durata || 15;
   const [us, them] = scoreOf(match);
   const squad = roster.filter(p => match.squad.includes(p.id));
-  const playedIn = (pid, per) => (match.lineup[pid] || []).includes(per);
+  const clock = (match.clocks || {})[period] || {
+    el: 0,
+    st: null
+  };
+  const corre = !!clock.st;
+  const sec = secNow(match, period);
+  const sforato = sec > durata * 60;
+  useEffect(() => {
+    const t = setInterval(() => tick(x => x + 1), 1000);
+    return () => clearInterval(t);
+  }, []);
   const tempiOf = pid => (match.lineup[pid] || []).length;
-  const setPeriod = n => update({
-    ...match,
-    cur: n
-  });
-  function togglePlayer(pid) {
-    if (readOnly) return;
-    const cur = match.lineup[pid] || [];
+  const minOf = pid => Math.round(secGiocati(match, pid) / 60);
+  function avviaPausa() {
+    const c = (match.clocks || {})[period] || {
+      el: 0,
+      st: null
+    };
+    const next = c.st ? {
+      el: c.el + (Date.now() - c.st) / 1000,
+      st: null
+    } : {
+      el: c.el,
+      st: Date.now()
+    };
     update({
       ...match,
-      lineup: {
-        ...match.lineup,
-        [pid]: cur.includes(period) ? cur.filter(z => z !== period) : [...cur, period]
+      clocks: {
+        ...(match.clocks || {}),
+        [period]: next
       }
     });
   }
-  function setPeriods(n) {
+  function azzera() {
+    const stints = (match.stints || []).filter(x => x.p !== period);
     const lineup = {};
-    for (const k of Object.keys(match.lineup)) lineup[k] = (match.lineup[k] || []).filter(p => p <= n);
+    for (const k of Object.keys(match.lineup || {})) lineup[k] = (match.lineup[k] || []).filter(z => z !== period);
     update({
       ...match,
-      periods: n,
+      clocks: {
+        ...(match.clocks || {}),
+        [period]: {
+          el: 0,
+          st: null
+        }
+      },
+      stints,
+      lineup
+    });
+  }
+  function setPeriod(n) {
+    if (n === period) return;
+    const t = secNow(match, period);
+    const stints = (match.stints || []).map(x => x.p === period && x.to == null ? {
+      ...x,
+      to: t
+    } : x);
+    const c = (match.clocks || {})[period] || {
+      el: 0,
+      st: null
+    };
+    const clocks = {
+      ...(match.clocks || {}),
+      [period]: {
+        el: c.el + (c.st ? (Date.now() - c.st) / 1000 : 0),
+        st: null
+      }
+    };
+    update({
+      ...match,
+      cur: n,
+      stints,
+      clocks
+    });
+  }
+  function togglePlayer(pid) {
+    if (readOnly) return;
+    const t = secNow(match, period);
+    const aperto = (match.stints || []).find(x => x.pid === pid && x.p === period && x.to == null);
+    let stints = [...(match.stints || [])],
+      lineup = {
+        ...(match.lineup || {})
+      };
+    if (aperto) {
+      if (t - aperto.from < 2) {
+        stints = stints.filter(x => x.id !== aperto.id);
+        if (!stints.some(x => x.pid === pid && x.p === period)) lineup[pid] = (lineup[pid] || []).filter(z => z !== period);
+      } else stints = stints.map(x => x.id === aperto.id ? {
+        ...x,
+        to: t
+      } : x);
+    } else {
+      stints.push({
+        id: uid(),
+        p: period,
+        pid,
+        from: t,
+        to: null
+      });
+      if (!(lineup[pid] || []).includes(period)) lineup[pid] = [...(lineup[pid] || []), period];
+    }
+    update({
+      ...match,
+      stints,
+      lineup
+    });
+  }
+  function schieraComePrima() {
+    const prec = period - 1;
+    if (prec < 1) return;
+    const t = secNow(match, period);
+    const ids = squad.filter(p => (match.lineup[p.id] || []).includes(prec) && !inCampo(match, p.id, period)).map(p => p.id);
+    if (!ids.length) return;
+    const lineup = {
+      ...(match.lineup || {})
+    };
+    ids.forEach(id => {
+      const a = lineup[id] || [];
+      if (!a.includes(period)) lineup[id] = [...a, period];
+    });
+    update({
+      ...match,
       lineup,
-      cur: Math.min(period, n),
-      goals: match.goals.filter(g => g.period <= n)
+      stints: [...(match.stints || []), ...ids.map(id => ({
+        id: uid(),
+        p: period,
+        pid: id,
+        from: t,
+        to: null
+      }))]
+    });
+  }
+  const nome = id => (roster.find(p => p.id === id) || {}).name || "—";
+  function applicaCambio() {
+    if (!esce || !entra) return;
+    const t = secNow(match, period);
+    let stints = [...(match.stints || [])],
+      lineup = {
+        ...(match.lineup || {})
+      };
+    const ap = stints.find(x => x.pid === esce && x.p === period && x.to == null);
+    if (ap) stints = stints.map(x => x.id === ap.id ? {
+      ...x,
+      to: t
+    } : x);
+    stints.push({
+      id: uid(),
+      p: period,
+      pid: entra,
+      from: t,
+      to: null
+    });
+    if (!(lineup[entra] || []).includes(period)) lineup[entra] = [...(lineup[entra] || []), period];
+    update({
+      ...match,
+      stints,
+      lineup,
+      subs: [...(match.subs || []), {
+        id: uid(),
+        p: period,
+        sec: t,
+        out: esce,
+        in: entra
+      }]
+    });
+    setUltimo(nome(esce) + " esce, entra " + nome(entra) + " al " + mmss(t));
+    setEsce(null);
+    setEntra(null);
+  }
+  function annullaCambio(c) {
+    let stints = (match.stints || []).filter(x => !(x.pid === c.in && x.p === c.p && x.from === c.sec));
+    stints = stints.map(x => x.pid === c.out && x.p === c.p && x.to === c.sec ? {
+      ...x,
+      to: null
+    } : x);
+    const lineup = {
+      ...(match.lineup || {})
+    };
+    if (!stints.some(x => x.pid === c.in && x.p === c.p)) lineup[c.in] = (lineup[c.in] || []).filter(z => z !== c.p);
+    update({
+      ...match,
+      stints,
+      lineup,
+      subs: (match.subs || []).filter(x => x.id !== c.id)
     });
   }
   function addGoal(team, playerId) {
@@ -1217,19 +1477,20 @@ function LiveMatch({
     });
     setPicker(false);
   }
+  const inCampoOra = squad.filter(p => inCampo(match, p.id, period));
   const hard = [],
     soft = [];
-  if (period >= 2 && match.periods >= 3) for (const p of squad) if (!playedIn(p.id, 1) && !playedIn(p.id, 2)) hard.push(`${p.name}: nessuno dei primi due tempi`);
+  if (period >= 2 && match.periods >= 3) for (const p of squad) if (!(match.lineup[p.id] || []).includes(1) && !(match.lineup[p.id] || []).includes(2)) hard.push(p.name + ": nessuno dei primi due tempi");
   if (period >= match.periods) for (const p of squad) {
     const t = tempiOf(p.id);
-    if (t < 2) soft.push(`${p.name}: solo ${t} ${t === 1 ? "tempo" : "tempi"}`);
-    if (match.periods === 4 && t > 3) hard.push(`${p.name}: più di 3 tempi`);
+    if (t < 2) soft.push(p.name + ": solo " + t + " " + (t === 1 ? "tempo" : "tempi"));
+    if (match.periods === 4 && t > 3) hard.push(p.name + ": più di 3 tempi");
   }
   return /*#__PURE__*/React.createElement("div", {
     className: "pb6"
   }, /*#__PURE__*/React.createElement(Header, {
     title: match.opponent || "Avversario",
-    sub: `${typeLabel(match)} · ${fmtDate(match.date)} · ${match.home ? "casa" : "trasferta"}`,
+    sub: typeLabel(match) + " · " + fmtDate(match.date) + " · " + (match.home ? "casa" : "trasferta"),
     onBack: onBack,
     right: !readOnly && /*#__PURE__*/React.createElement("button", {
       onClick: () => setSettings(true),
@@ -1249,14 +1510,14 @@ function LiveMatch({
   }, /*#__PURE__*/React.createElement("div", {
     className: "tc"
   }, /*#__PURE__*/React.createElement("div", {
+    className: "num",
     style: {
-      fontSize: 68,
+      fontSize: 62,
       fontWeight: 800,
       lineHeight: 1,
       letterSpacing: -3,
       color: C.gr
-    },
-    className: "num"
+    }
   }, us), /*#__PURE__*/React.createElement("div", {
     style: {
       color: C.dim,
@@ -1266,29 +1527,61 @@ function LiveMatch({
   }, "noi")), /*#__PURE__*/React.createElement("div", {
     style: {
       color: C.line,
-      fontSize: 40,
+      fontSize: 38,
       fontWeight: 300,
-      paddingBottom: 18
+      paddingBottom: 16
     }
   }, "–"), /*#__PURE__*/React.createElement("div", {
     className: "tc"
   }, /*#__PURE__*/React.createElement("div", {
+    className: "num",
     style: {
-      fontSize: 68,
+      fontSize: 62,
       fontWeight: 800,
       lineHeight: 1,
       letterSpacing: -3,
       color: C.dim
-    },
-    className: "num"
+    }
   }, them), /*#__PURE__*/React.createElement("div", {
     style: {
       color: C.dim,
       fontSize: 13,
       marginTop: 4
     }
-  }, "loro"))), !readOnly && /*#__PURE__*/React.createElement("div", {
-    className: "grid g2 gap3 px4"
+  }, "loro"))), /*#__PURE__*/React.createElement("div", {
+    className: "px4"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex ic jb",
+    style: {
+      background: corre ? C.tint : C.sur,
+      border: "1px solid " + (corre ? C.gr : C.line),
+      borderRadius: 14,
+      padding: "12px 14px"
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 12
+    }
+  }, period, "º tempo di ", match.periods, " · ", durata, "′"), /*#__PURE__*/React.createElement("div", {
+    className: "num",
+    style: {
+      fontSize: 38,
+      fontWeight: 800,
+      letterSpacing: -1,
+      lineHeight: 1.1,
+      color: sforato ? C.warn : C.txt
+    }
+  }, mmss(sec))), !readOnly && /*#__PURE__*/React.createElement(Btn, {
+    tone: corre ? "quiet" : "solid",
+    onClick: avviaPausa,
+    style: {
+      minWidth: 110,
+      padding: "14px 0",
+      fontSize: 16
+    }
+  }, corre ? "Pausa" : sec > 0 ? "Riprendi" : "Avvia"))), !readOnly && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    className: "grid g2 gap3 px4 pt5"
   }, /*#__PURE__*/React.createElement(Btn, {
     tone: "solid",
     onClick: () => setPicker(true),
@@ -1301,6 +1594,20 @@ function LiveMatch({
       padding: "16px 0"
     }
   }, "Gol loro")), /*#__PURE__*/React.createElement("div", {
+    className: "px4 mt3"
+  }, /*#__PURE__*/React.createElement(Btn, {
+    onClick: () => {
+      setUltimo("");
+      setCambio(true);
+    },
+    disabled: squad.filter(p => inCampo(match, p.id, period)).length === 0,
+    style: {
+      width: "100%",
+      padding: "16px 0",
+      border: "1px solid " + C.gr,
+      color: C.gr
+    }
+  }, "Cambio"))), /*#__PURE__*/React.createElement("div", {
     className: "px4 pt6"
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -1314,22 +1621,48 @@ function LiveMatch({
       length: match.periods
     }).map((_, i) => ({
       v: i + 1,
-      l: `${i + 1}º`
+      l: i + 1 + "º"
     })),
     value: period,
     onChange: setPeriod
-  })), /*#__PURE__*/React.createElement("div", {
+  })), !readOnly && corre && inCampoOra.length === 0 && /*#__PURE__*/React.createElement("div", {
     className: "px4 pt5"
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      color: C.dim,
-      fontSize: 13,
+      background: C.gr,
+      color: "#fff",
+      borderRadius: 12,
+      padding: 14,
+      fontSize: 14,
+      fontWeight: 700
+    }
+  }, "Cronometro in marcia ma nessuno in campo: tocca i nomi di chi sta giocando.")), /*#__PURE__*/React.createElement("div", {
+    className: "px4 pt5"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex ic jb",
+    style: {
       marginBottom: 8
     }
-  }, readOnly ? `In campo nel ${period}º tempo` : `In campo nel ${period}º tempo — tocca per segnare`), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: C.dim,
+      fontSize: 13
+    }
+  }, "In campo ora (", inCampoOra.length, ")"), !readOnly && period > 1 && inCampoOra.length === 0 && /*#__PURE__*/React.createElement("button", {
+    onClick: schieraComePrima,
+    style: {
+      background: "none",
+      border: "none",
+      color: C.gr,
+      fontSize: 13,
+      fontWeight: 700,
+      cursor: "pointer",
+      padding: 0
+    }
+  }, "Schiera come nel ", period - 1, "º")), /*#__PURE__*/React.createElement("div", {
     className: "grid g2 gap2"
   }, squad.map(p => {
-    const on = playedIn(p.id, period);
+    const on = inCampo(match, p.id, period);
     const gol = match.goals.filter(g => g.playerId === p.id).length;
     return /*#__PURE__*/React.createElement("button", {
       key: p.id,
@@ -1356,12 +1689,19 @@ function LiveMatch({
         opacity: .85
       }
     }, gol, "⚽")), /*#__PURE__*/React.createElement("div", {
-      className: "mt2"
+      className: "flex ic jb mt2"
     }, /*#__PURE__*/React.createElement(Dots, {
       played: tempiOf(p.id),
       total: match.periods,
       color: on ? "#fff" : C.gr
-    })));
+    }), /*#__PURE__*/React.createElement("span", {
+      className: "num",
+      style: {
+        fontSize: 13,
+        fontWeight: 700,
+        opacity: on ? .9 : .6
+      }
+    }, minOf(p.id), "′")));
   }))), !readOnly && (hard.length > 0 || soft.length > 0) && /*#__PURE__*/React.createElement("div", {
     className: "px4 pt5"
   }, hard.length > 0 && /*#__PURE__*/React.createElement("div", {
@@ -1440,7 +1780,47 @@ function LiveMatch({
         cursor: "pointer"
       }
     }, "annulla"));
-  })), !readOnly && /*#__PURE__*/React.createElement("div", {
+  })), (match.subs || []).length > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "px4 pt5"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 13,
+      marginBottom: 8
+    }
+  }, "Cambi"), (match.subs || []).map(c => /*#__PURE__*/React.createElement("div", {
+    key: c.id,
+    className: "flex ic jb py2",
+    style: {
+      borderBottom: "1px solid " + C.line
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 15
+    }
+  }, nome(c.out), " → ", /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontWeight: 700,
+      color: C.gr
+    }
+  }, nome(c.in))), /*#__PURE__*/React.createElement("span", {
+    className: "flex ic gap3"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "num",
+    style: {
+      color: C.dim,
+      fontSize: 13
+    }
+  }, c.p, "º · ", mmss(c.sec)), !readOnly && /*#__PURE__*/React.createElement("button", {
+    onClick: () => annullaCambio(c),
+    style: {
+      background: "none",
+      border: "none",
+      color: C.dim,
+      fontSize: 14,
+      cursor: "pointer"
+    }
+  }, "annulla"))))), !readOnly && /*#__PURE__*/React.createElement("div", {
     className: "px4 pt6"
   }, /*#__PURE__*/React.createElement(Btn, {
     tone: "solid",
@@ -1454,7 +1834,7 @@ function LiveMatch({
     title: "Chi ha segnato?"
   }, /*#__PURE__*/React.createElement("div", {
     className: "grid g2 gap2"
-  }, squad.map(p => /*#__PURE__*/React.createElement(Btn, {
+  }, (inCampoOra.length ? inCampoOra : squad).map(p => /*#__PURE__*/React.createElement(Btn, {
     key: p.id,
     onClick: () => addGoal("us", p.id)
   }, p.name))), /*#__PURE__*/React.createElement("div", {
@@ -1465,7 +1845,100 @@ function LiveMatch({
     style: {
       width: "100%"
     }
-  }, "Non assegnato"))), settings && /*#__PURE__*/React.createElement(Sheet, {
+  }, "Non assegnato"))), cambio && /*#__PURE__*/React.createElement(Sheet, {
+    onClose: () => {
+      setCambio(false);
+      setEsce(null);
+      setEntra(null);
+    },
+    title: "Cambio · " + period + "º tempo, " + mmss(sec)
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 13,
+      marginBottom: 8
+    }
+  }, "Chi esce"), /*#__PURE__*/React.createElement("div", {
+    className: "grid g2 gap2"
+  }, squad.filter(p => inCampo(match, p.id, period)).map(p => {
+    const sel = esce === p.id;
+    return /*#__PURE__*/React.createElement("button", {
+      key: p.id,
+      onClick: () => setEsce(sel ? null : p.id),
+      style: {
+        padding: 12,
+        borderRadius: 10,
+        fontSize: 14,
+        fontWeight: 700,
+        textAlign: "left",
+        cursor: "pointer",
+        background: sel ? C.gr : "#fff",
+        color: sel ? "#fff" : C.txt,
+        border: "1px solid " + (sel ? C.gr : C.line)
+      }
+    }, p.name);
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 13,
+      margin: "18px 0 8px"
+    }
+  }, "Chi entra"), /*#__PURE__*/React.createElement("div", {
+    className: "grid g2 gap2"
+  }, squad.filter(p => !inCampo(match, p.id, period)).map(p => {
+    const sel = entra === p.id;
+    return /*#__PURE__*/React.createElement("button", {
+      key: p.id,
+      onClick: () => setEntra(sel ? null : p.id),
+      style: {
+        padding: 12,
+        borderRadius: 10,
+        fontSize: 14,
+        fontWeight: 700,
+        textAlign: "left",
+        cursor: "pointer",
+        background: sel ? C.gr : "#fff",
+        color: sel ? "#fff" : C.txt,
+        border: "1px solid " + (sel ? C.gr : C.line)
+      }
+    }, /*#__PURE__*/React.createElement("div", null, p.name), /*#__PURE__*/React.createElement("div", {
+      className: "num",
+      style: {
+        fontSize: 12,
+        fontWeight: 500,
+        opacity: .7
+      }
+    }, Math.round(secGiocati(match, p.id) / 60), "′ finora"));
+  })), ultimo && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.gr,
+      fontSize: 14,
+      fontWeight: 600,
+      marginTop: 14
+    }
+  }, ultimo), /*#__PURE__*/React.createElement("div", {
+    className: "mt4"
+  }, /*#__PURE__*/React.createElement(Btn, {
+    tone: "solid",
+    disabled: !esce || !entra,
+    onClick: applicaCambio,
+    style: {
+      width: "100%",
+      padding: "16px 0"
+    }
+  }, "Conferma il cambio")), /*#__PURE__*/React.createElement("div", {
+    className: "mt2"
+  }, /*#__PURE__*/React.createElement(Btn, {
+    tone: "ghost",
+    onClick: () => {
+      setCambio(false);
+      setEsce(null);
+      setEntra(null);
+    },
+    style: {
+      width: "100%"
+    }
+  }, "Chiudi"))), settings && /*#__PURE__*/React.createElement(Sheet, {
     onClose: () => setSettings(false),
     title: "Gara"
   }, /*#__PURE__*/React.createElement("div", {
@@ -1477,17 +1950,44 @@ function LiveMatch({
   }, "Numero di tempi"), /*#__PURE__*/React.createElement(Seg, {
     options: [2, 3, 4].map(n => ({
       v: n,
-      l: `${n} tempi`
+      l: n + " tempi"
     })),
     value: match.periods,
-    onChange: setPeriods
+    onChange: n => {
+      const lineup = {};
+      for (const k of Object.keys(match.lineup || {})) lineup[k] = (match.lineup[k] || []).filter(p => p <= n);
+      update({
+        ...match,
+        periods: n,
+        lineup,
+        cur: Math.min(period, n),
+        stints: (match.stints || []).filter(x => x.p <= n),
+        goals: match.goals.filter(g => g.period <= n)
+      });
+    }
   }), /*#__PURE__*/React.createElement("div", {
     style: {
       color: C.dim,
       fontSize: 13,
       margin: "18px 0 8px"
     }
-  }, "Convocati — puoi aggiungere o togliere ragazzi anche a partita iniziata"), /*#__PURE__*/React.createElement(SquadPicker, {
+  }, "Durata di ogni tempo"), /*#__PURE__*/React.createElement(Seg, {
+    options: [10, 15, 20, 25].map(n => ({
+      v: n,
+      l: n + "′"
+    })),
+    value: durata,
+    onChange: n => update({
+      ...match,
+      durata: n
+    })
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 13,
+      margin: "18px 0 8px"
+    }
+  }, "Convocati — puoi cambiarli anche a partita iniziata"), /*#__PURE__*/React.createElement(SquadPicker, {
     roster: roster,
     squad: match.squad,
     setSquad: s => update({
@@ -1497,6 +1997,13 @@ function LiveMatch({
   }), /*#__PURE__*/React.createElement("div", {
     className: "mt4"
   }, /*#__PURE__*/React.createElement(Btn, {
+    onClick: azzera,
+    style: {
+      width: "100%"
+    }
+  }, "Azzera il ", period, "º tempo")), /*#__PURE__*/React.createElement("div", {
+    className: "mt2"
+  }, /*#__PURE__*/React.createElement(Btn, {
     tone: "solid",
     onClick: () => setSettings(false),
     style: {
@@ -1504,9 +2011,6 @@ function LiveMatch({
     }
   }, "Fatto"))));
 }
-
-/* ---------------- gare ---------------- */
-
 function Gare({
   matches,
   open,
@@ -1694,24 +2198,25 @@ function Stats({
   const s = useMemo(() => computeStats(roster, matches), [roster, matches]);
   const [img, setImg] = useState("");
   const cv = useRef(null);
-  const ord = [...s.per].sort((a, b) => b.tempi - a.tempi || a.name.localeCompare(b.name));
-  const maxT = Math.max(1, ...ord.map(p => p.tempi));
+  const ord = [...s.per].sort((a, b) => b.minuti - a.minuti || a.name.localeCompare(b.name));
+  const maxT = Math.max(1, ...ord.map(p => p.minuti));
   const marcatori = [...s.per].filter(p => p.gol > 0).sort((a, b) => b.gol - a.gol);
   useEffect(() => {
     const im = new Image();
     im.onload = () => render(im);
-    im.onerror = () => render(null);
+    im.onerror = () => {};
     im.src = LOGO;
+    render(null);
     function render(logo) {
       const c = cv.current;
       if (!c) return;
       const W = 1080,
-        Hh = 460 + ord.length * 62 + 140;
+        Hh = 470 + ord.length * 62;
       c.width = W;
       c.height = Hh;
       const x = c.getContext("2d");
       if (!x) return;
-      const F = (sz, w = 400) => `${w} ${sz}px ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif`;
+      const F = (sz, w = 400) => `${w} ${sz}px Helvetica,Arial,sans-serif`;
       x.fillStyle = "#fff";
       x.fillRect(0, 0, W, Hh);
       x.fillStyle = C.gr;
@@ -1739,20 +2244,20 @@ function Stats({
       x.font = F(26, 600);
       x.fillText("Giocatore", 70, y);
       x.fillText("Part.", 620, y);
-      x.fillText("Tempi", 760, y);
+      x.fillText("Minuti", 760, y);
       x.fillText("Impiego", 880, y);
       x.fillText("Gol", 1010, y);
       y += 46;
       ord.forEach(p => {
         x.fillStyle = C.tint;
-        x.fillRect(70, y - 26, p.tempi / maxT * 520, 36);
+        x.fillRect(70, y - 26, p.minuti / maxT * 520, 36);
         x.fillStyle = C.txt;
         x.font = F(30, 600);
         x.fillText(p.name, 84, y);
         x.font = F(30, 500);
         x.fillStyle = C.dim;
         x.fillText(String(p.presenze), 628, y);
-        x.fillText(String(p.tempi), 772, y);
+        x.fillText(p.minuti + "\u2032", 772, y);
         x.fillText(p.impiego + "%", 890, y);
         x.fillStyle = p.gol ? C.gr : C.dim;
         x.font = F(30, 700);
@@ -1765,8 +2270,8 @@ function Stats({
     }
   }, [roster, matches]);
   function esportaCSV() {
-    const rows = [["Giocatore", "Convocazioni", "Presenze", "Tempi giocati", "Tempi disponibili", "Impiego %", "Gol", "Media tempi a partita"]];
-    for (const p of ord) rows.push([p.name, p.convocazioni, p.presenze, p.tempi, p.disponibili, p.impiego, p.gol, p.mediaTempi.toFixed(1)]);
+    const rows = [["Giocatore", "Convocazioni", "Presenze", "Tempi giocati", "Minuti giocati", "Minuti disponibili", "Impiego %", "Gol", "Media minuti a partita"]];
+    for (const p of ord) rows.push([p.name, p.convocazioni, p.presenze, p.tempi, p.minuti, p.dispMin, p.impiego, p.gol, p.mediaMin.toFixed(1)]);
     rows.push([]);
     rows.push(["Competizione", "Vinte", "Pari", "Perse", "Gol fatti", "Gol subiti"]);
     for (const t of TYPES) {
@@ -1776,11 +2281,11 @@ function Stats({
     }
     rows.push(["Totale", s.v, s.n, s.s, s.gf, s.gs]);
     rows.push([]);
-    rows.push(["Partita", "Data", "Tipo", "Avversario", "Casa/Trasferta", "Tempi", "Nostri gol", "Gol subiti", "Marcatori"]);
+    rows.push(["Partita", "Data", "Tipo", "Avversario", "Casa/Trasferta", "Tempi", "Durata tempo", "Nostri gol", "Gol subiti", "Marcatori"]);
     matches.filter(m => m.status === "done").sort((a, b) => a.date < b.date ? 1 : -1).forEach((m, i) => {
       const [u, t] = scoreOf(m);
       const sc = m.goals.filter(g => g.team === "us" && g.playerId).map(g => (roster.find(p => p.id === g.playerId) || {}).name).filter(Boolean).join(", ");
-      rows.push([i + 1, fmtDate(m.date), typeLabel(m), m.opponent, m.home ? "Casa" : "Trasferta", m.periods, u, t, sc]);
+      rows.push([i + 1, fmtDate(m.date), typeLabel(m), m.opponent, m.home ? "Casa" : "Trasferta", m.periods, m.durata || 15, u, t, sc]);
     });
     const csv = "\uFEFF" + rows.map(r => r.map(c => `"${String(c == null ? "" : c).replace(/"/g, '""')}"`).join(";")).join("\r\n");
     download(csv, "statistiche-2015.csv", "text/csv;charset=utf-8;");
@@ -1858,7 +2363,7 @@ function Stats({
       width: 46,
       textAlign: "right"
     }
-  }, "Tempi"), /*#__PURE__*/React.createElement("span", {
+  }, "Min"), /*#__PURE__*/React.createElement("span", {
     style: {
       width: 54,
       textAlign: "right"
@@ -1880,7 +2385,7 @@ function Stats({
       left: 0,
       top: 0,
       bottom: 0,
-      width: p.tempi / maxT * 100 + "%",
+      width: p.minuti / maxT * 100 + "%",
       background: C.tint,
       borderRadius: 4
     }
@@ -1908,7 +2413,7 @@ function Stats({
       width: 46,
       textAlign: "right"
     }
-  }, p.tempi), /*#__PURE__*/React.createElement("span", {
+  }, p.minuti, "′"), /*#__PURE__*/React.createElement("span", {
     className: "num",
     style: {
       width: 54,
@@ -1929,7 +2434,7 @@ function Stats({
       fontSize: 12,
       marginTop: 8
     }
-  }, "Impiego = tempi giocati sul totale dei tempi delle partite in cui era convocato."), marcatori.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }, "Impiego = minuti giocati sul totale dei minuti delle partite in cui era convocato."), marcatori.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 16,
       fontWeight: 800,
@@ -1995,23 +2500,15 @@ function Stats({
     onClick: esportaCSV
   }, "Excel (CSV)"), /*#__PURE__*/React.createElement(Btn, {
     onClick: () => window.print()
-  }, "PDF / stampa")), img && /*#__PURE__*/React.createElement("a", {
-    href: img,
-    download: "statistiche-2015.png",
+  }, "PDF / stampa")), /*#__PURE__*/React.createElement("div", {
+    className: "mt2"
+  }, /*#__PURE__*/React.createElement(Btn, {
+    disabled: !img,
     style: {
-      display: "block",
-      marginTop: 8,
-      background: "#fff",
-      color: C.txt,
-      border: "1px solid " + C.line,
-      borderRadius: 10,
-      padding: "12px 14px",
-      fontSize: 15,
-      fontWeight: 600,
-      textAlign: "center",
-      textDecoration: "none"
-    }
-  }, "Immagine per WhatsApp"), /*#__PURE__*/React.createElement("div", {
+      width: "100%"
+    },
+    onClick: () => condividiPNG(img, "statistiche-2015.png", "Statistiche 2015")
+  }, img ? "Immagine per WhatsApp" : "Preparo l'immagine…")), /*#__PURE__*/React.createElement("div", {
     style: {
       color: C.dim,
       fontSize: 12,
@@ -2311,6 +2808,16 @@ function App() {
     matches: db.matches.filter(m => m.id !== id)
   });
   const live = db.matches.find(m => m.status === "live");
+  const ultima = (() => {
+    const ms = [...db.matches].sort((x, y) => x.date < y.date ? 1 : -1);
+    const l = ms[0];
+    if (!l) return null;
+    return {
+      ids: (l.squad || []).filter(id => db.roster.some(p => p.id === id)),
+      opponent: l.opponent,
+      date: l.date
+    };
+  })();
   const readOnly = !admin;
   const tabs = [{
     id: "gare",
@@ -2329,6 +2836,7 @@ function App() {
   let body = null;
   if (screen && screen.name === "form" && admin) body = /*#__PURE__*/React.createElement(ConvForm, {
     roster: db.roster,
+    ultima: ultima,
     initial: screen.id ? find(screen.id) : null,
     onBack: () => setScreen(screen.id ? {
       name: "conv",
@@ -2354,11 +2862,14 @@ function App() {
       drop(screen.id);
       setScreen(null);
     },
-    onStart: p => {
+    onStart: (p, d) => {
       upsert({
         ...find(screen.id),
         periods: p,
+        durata: d,
         cur: 1,
+        clocks: {},
+        stints: [],
         status: "live"
       });
       setScreen({
@@ -2373,8 +2884,25 @@ function App() {
     readOnly: readOnly,
     onBack: () => setScreen(null),
     finish: () => {
+      const m = find(screen.id);
+      const stints = (m.stints || []).map(x => x.to == null ? {
+        ...x,
+        to: secNow(m, x.p)
+      } : x);
+      const clocks = {
+        ...(m.clocks || {})
+      };
+      for (const k of Object.keys(clocks)) {
+        const c = clocks[k];
+        if (c.st) clocks[k] = {
+          el: c.el + (Date.now() - c.st) / 1000,
+          st: null
+        };
+      }
       upsert({
-        ...find(screen.id),
+        ...m,
+        stints,
+        clocks,
         status: "done"
       });
       setScreen(null);
