@@ -587,6 +587,7 @@ function computeStats(roster, matches) {
       presenze,
       convocazioni,
       tempi,
+      gol,
       minuti: Math.round(minuti),
       dispTempi,
       dispMin,
@@ -627,6 +628,36 @@ function computeStats(roster, matches) {
       n++;
     }
   }
+
+  // dati di squadra, quelli che vedono tutti
+  const maxP = Math.max(2, ...done.map(m => m.periods || 3));
+  const perTempo = Array.from({
+    length: maxP
+  }, (_, i) => ({
+    p: i + 1,
+    fatti: 0,
+    subiti: 0
+  }));
+  let cleanSheet = 0;
+  const avversari = new Set(),
+    tornei = new Set();
+  let tuttiDue = 0,
+    valutabili = 0;
+  for (const m of done) {
+    for (const g of m.goals) {
+      const r = perTempo[(g.period || 1) - 1];
+      if (r) g.team === "us" ? r.fatti++ : r.subiti++;
+    }
+    if (scoreOf(m)[1] === 0) cleanSheet++;
+    if (m.opponent) avversari.add(m.opponent.trim().toLowerCase());
+    if (m.type === "torneo" && m.tournament) tornei.add(m.tournament.trim().toLowerCase());
+    if ((m.squad || []).length) {
+      valutabili++;
+      if (m.squad.every(id => ((m.lineup || {})[id] || []).length >= 2)) tuttiDue++;
+    }
+  }
+  const convocatiMai = per.filter(p => p.convocazioni > 0).length;
+  const inRete = per.filter(p => p.gol > 0).map(p => p.name).sort((a, b) => a.localeCompare(b));
   return {
     per,
     byType,
@@ -635,7 +666,15 @@ function computeStats(roster, matches) {
     gs,
     v,
     n,
-    s: s2
+    s: s2,
+    perTempo,
+    cleanSheet,
+    avversari: avversari.size,
+    tornei: tornei.size,
+    tuttiDue,
+    valutabili,
+    convocatiMai,
+    inRete
   };
 }
 
@@ -2218,7 +2257,8 @@ function History({
 
 function Stats({
   roster,
-  matches
+  matches,
+  readOnly
 }) {
   const s = useMemo(() => computeStats(roster, matches), [roster, matches]);
   const [img, setImg] = useState("");
@@ -2226,7 +2266,9 @@ function Stats({
   const ord = [...s.per].sort((a, b) => b.minuti - a.minuti || a.name.localeCompare(b.name));
   const maxT = Math.max(1, ...ord.map(p => p.minuti));
   const marcatori = [...s.per].filter(p => p.gol > 0).sort((a, b) => b.gol - a.gol);
+  const maxTempo = Math.max(1, ...s.perTempo.map(r => Math.max(r.fatti, r.subiti)));
   useEffect(() => {
+    if (readOnly) return;
     const im = new Image();
     im.onload = () => render(im);
     im.onerror = () => {};
@@ -2273,6 +2315,7 @@ function Stats({
       x.fillText("Impiego", 880, y);
       x.fillText("Gol", 1010, y);
       y += 46;
+      x.font = F(30, 600);
       ord.forEach(p => {
         x.fillStyle = C.tint;
         x.fillRect(70, y - 26, p.minuti / maxT * 520, 36);
@@ -2293,7 +2336,7 @@ function Stats({
         setImg(c.toDataURL("image/png"));
       } catch (e) {}
     }
-  }, [roster, matches]);
+  }, [roster, matches, readOnly]);
   function esportaCSV() {
     const rows = [["Giocatore", "Convocazioni", "Presenze", "Tempi giocati", "Minuti giocati", "Minuti disponibili", "Impiego %", "Gol", "Media minuti a partita"]];
     for (const p of ord) rows.push([p.name, p.convocazioni, p.presenze, p.tempi, p.minuti, p.dispMin, p.impiego, p.gol, p.mediaMin.toFixed(1)]);
@@ -2315,6 +2358,7 @@ function Stats({
     const csv = "\uFEFF" + rows.map(r => r.map(c => `"${String(c == null ? "" : c).replace(/"/g, '""')}"`).join(";")).join("\r\n");
     download(csv, "statistiche-2015.csv", "text/csv;charset=utf-8;");
   }
+  const media = x => s.total ? (x / s.total).toFixed(1).replace(".", ",") : "0";
   return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Header, {
     title: "Statistiche",
     sub: `${CLUB} · ${s.total} partite`
@@ -2364,6 +2408,196 @@ function Stats({
       color: C.dim
     }
   }, l)))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 16,
+      fontWeight: 800,
+      marginBottom: 8
+    }
+  }, "Bilancio per competizione"), TYPES.map(t => {
+    const b = s.byType[t.id];
+    if (b.v + b.n + b.p === 0) return null;
+    return /*#__PURE__*/React.createElement("div", {
+      key: t.id,
+      className: "flex ic jb py3",
+      style: {
+        borderBottom: "1px solid " + C.line
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 15,
+        fontWeight: 600
+      }
+    }, t.label), /*#__PURE__*/React.createElement("span", {
+      className: "num",
+      style: {
+        fontSize: 15,
+        color: C.dim
+      }
+    }, b.v, "V ", b.n, "N ", b.p, "P · ", b.gf, ":", b.gs));
+  }), /*#__PURE__*/React.createElement("div", {
+    className: "flex ic jb py3",
+    style: {
+      borderBottom: "1px solid " + C.line
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 15,
+      fontWeight: 600
+    }
+  }, "Totale"), /*#__PURE__*/React.createElement("span", {
+    className: "num",
+    style: {
+      fontSize: 15,
+      color: C.gr,
+      fontWeight: 700
+    }
+  }, s.v, "V ", s.n, "N ", s.s, "P · ", s.gf, ":", s.gs)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 16,
+      fontWeight: 800,
+      margin: "24px 0 8px"
+    }
+  }, "Medie"), /*#__PURE__*/React.createElement("div", {
+    className: "grid g2 gap2"
+  }, [["Gol fatti a partita", media(s.gf)], ["Gol subiti a partita", media(s.gs)], ["Gare senza subire gol", s.cleanSheet + " su " + s.total], ["Avversari affrontati", s.avversari]].map(([l, v]) => /*#__PURE__*/React.createElement("div", {
+    key: l,
+    style: {
+      background: C.sur,
+      border: "1px solid " + C.line,
+      borderRadius: 12,
+      padding: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "num",
+    style: {
+      fontSize: 22,
+      fontWeight: 800,
+      color: C.gr
+    }
+  }, v), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: C.dim
+    }
+  }, l)))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 16,
+      fontWeight: 800,
+      margin: "24px 0 8px"
+    }
+  }, "Come vanno i tempi"), s.perTempo.map(r => /*#__PURE__*/React.createElement("div", {
+    key: r.p,
+    className: "py2",
+    style: {
+      borderBottom: "1px solid " + C.line
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex ic jb",
+    style: {
+      fontSize: 14,
+      marginBottom: 6
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontWeight: 600
+    }
+  }, r.p, "º tempo"), /*#__PURE__*/React.createElement("span", {
+    className: "num",
+    style: {
+      color: C.dim
+    }
+  }, r.fatti, " fatti · ", r.subiti, " subiti")), /*#__PURE__*/React.createElement("div", {
+    className: "flex ic gap2"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      height: 8,
+      background: C.line,
+      borderRadius: 8,
+      overflow: "hidden"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: r.fatti / maxTempo * 100 + "%",
+      height: "100%",
+      background: C.gr
+    }
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      height: 8,
+      background: C.line,
+      borderRadius: 8,
+      overflow: "hidden"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: r.subiti / maxTempo * 100 + "%",
+      height: "100%",
+      background: C.dim
+    }
+  }))))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 12,
+      marginTop: 6
+    }
+  }, "A sinistra i gol fatti, a destra quelli subiti."), s.inRete.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 16,
+      fontWeight: 800,
+      margin: "24px 0 8px"
+    }
+  }, "Sono andati a segno"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 15,
+      lineHeight: 1.6
+    }
+  }, s.inRete.join(" · ")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 12,
+      marginTop: 6
+    }
+  }, s.inRete.length, " ragazzi diversi su ", s.convocatiMai, " convocati.")), !readOnly && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      borderTop: "2px solid " + C.gr,
+      margin: "28px 0 0"
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.gr,
+      fontSize: 12,
+      fontWeight: 700,
+      margin: "12px 0 4px"
+    }
+  }, "Solo per il dirigente"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 12,
+      marginBottom: 14
+    }
+  }, "Da qui in giù i dati individuali. I genitori non li vedono."), s.valutabili > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.tint,
+      borderRadius: 12,
+      padding: 14,
+      marginBottom: 20
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "num",
+    style: {
+      fontSize: 22,
+      fontWeight: 800,
+      color: C.gr
+    }
+  }, s.tuttiDue, " su ", s.valutabili), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      color: C.txt,
+      marginTop: 2
+    }
+  }, "gare in cui ", /*#__PURE__*/React.createElement("b", null, "tutti"), " i convocati hanno giocato almeno due tempi")), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 16,
       fontWeight: 800,
@@ -2484,33 +2718,6 @@ function Stats({
       fontWeight: 800
     }
   }, p.gol)))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 16,
-      fontWeight: 800,
-      margin: "24px 0 8px"
-    }
-  }, "Bilancio per competizione"), TYPES.map(t => {
-    const b = s.byType[t.id];
-    if (b.v + b.n + b.p === 0) return null;
-    return /*#__PURE__*/React.createElement("div", {
-      key: t.id,
-      className: "flex ic jb py3",
-      style: {
-        borderBottom: "1px solid " + C.line
-      }
-    }, /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontSize: 15,
-        fontWeight: 600
-      }
-    }, t.label), /*#__PURE__*/React.createElement("span", {
-      className: "num",
-      style: {
-        fontSize: 15,
-        color: C.dim
-      }
-    }, b.v, "V ", b.n, "N ", b.p, "P · ", b.gf, ":", b.gs));
-  }), /*#__PURE__*/React.createElement("div", {
     className: "noprint mt5"
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -2539,7 +2746,7 @@ function Stats({
       fontSize: 12,
       marginTop: 8
     }
-  }, "Per il PDF scegli \"Salva come PDF\" nella finestra di stampa. Da telefono puoi anche tenere premuta l'immagine qui sotto."), /*#__PURE__*/React.createElement("canvas", {
+  }, "L'immagine contiene la tabella individuale: mandala solo a chi di dovere."), /*#__PURE__*/React.createElement("canvas", {
     ref: cv,
     style: {
       width: "100%",
@@ -2547,7 +2754,7 @@ function Stats({
       borderRadius: 12,
       border: "1px solid " + C.line
     }
-  })))));
+  }))))));
 }
 
 /* ---------------- squadra ---------------- */
@@ -3019,7 +3226,8 @@ function App() {
     })
   });else if (tab === "stats") body = /*#__PURE__*/React.createElement(Stats, {
     roster: db.roster,
-    matches: db.matches
+    matches: db.matches,
+    readOnly: readOnly
   });else body = /*#__PURE__*/React.createElement(Team, {
     roster: db.roster,
     setRoster: r => setDb({
