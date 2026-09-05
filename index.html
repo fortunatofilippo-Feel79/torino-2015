@@ -459,12 +459,12 @@ const H = () => ({
   "Content-Type": "application/json"
 });
 async function cloudLoad() {
-  const r = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/stato?id=eq.${CONFIG.SQUADRA_ID}&select=dati`, {
+  const r = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/stato?id=eq.${CONFIG.SQUADRA_ID}&select=dati,aggiornato`, {
     headers: H()
   });
   if (!r.ok) throw new Error("lettura non riuscita");
   const rows = await r.json();
-  return rows[0] ? rows[0].dati : null;
+  return rows[0] || null;
 }
 async function cloudSave(db, chiave) {
   const r = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/rpc/salva_stato`, {
@@ -1194,7 +1194,7 @@ function ConvDetail({
       borderRadius: 14,
       border: "1px solid " + C.line
     }
-  }), !readOnly && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }), !readOnly && match.status === "convocata" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     className: "grid g2 gap2 mt5"
   }, /*#__PURE__*/React.createElement(Btn, {
     onClick: onEdit
@@ -1210,7 +1210,16 @@ function ConvDetail({
       width: "100%",
       padding: "16px 0"
     }
-  }, "Inizia la partita")))), ask && /*#__PURE__*/React.createElement(Sheet, {
+  }, "Inizia la partita"))), match.status !== "convocata" && /*#__PURE__*/React.createElement("div", {
+    className: "mt5"
+  }, /*#__PURE__*/React.createElement(Btn, {
+    tone: "solid",
+    onClick: onBack,
+    style: {
+      width: "100%",
+      padding: "16px 0"
+    }
+  }, match.status === "live" ? "Torna alla partita" : "Indietro"))), ask && /*#__PURE__*/React.createElement(Sheet, {
     onClose: () => setAsk(false),
     title: "Come si gioca oggi?"
   }, /*#__PURE__*/React.createElement("div", {
@@ -1265,7 +1274,8 @@ function LiveMatch({
   update,
   finish,
   onBack,
-  readOnly
+  readOnly,
+  onConvocazione
 }) {
   const [picker, setPicker] = useState(false);
   const [settings, setSettings] = useState(false);
@@ -1492,8 +1502,8 @@ function LiveMatch({
     title: match.opponent || "Avversario",
     sub: typeLabel(match) + " · " + fmtDate(match.date) + " · " + (match.home ? "casa" : "trasferta"),
     onBack: onBack,
-    right: !readOnly && /*#__PURE__*/React.createElement("button", {
-      onClick: () => setSettings(true),
+    right: /*#__PURE__*/React.createElement("button", {
+      onClick: onConvocazione,
       style: {
         background: "rgba(255,255,255,.18)",
         border: "none",
@@ -1504,7 +1514,7 @@ function LiveMatch({
         fontWeight: 700,
         cursor: "pointer"
       }
-    }, "Gara")
+    }, "Convocazione")
   }), /*#__PURE__*/React.createElement("div", {
     className: "flex ie jc gap3 px4 pt6 pb4"
   }, /*#__PURE__*/React.createElement("div", {
@@ -1823,6 +1833,12 @@ function LiveMatch({
   }, "annulla"))))), !readOnly && /*#__PURE__*/React.createElement("div", {
     className: "px4 pt6"
   }, /*#__PURE__*/React.createElement(Btn, {
+    onClick: () => setSettings(true),
+    style: {
+      width: "100%",
+      marginBottom: 10
+    }
+  }, "Impostazioni gara"), /*#__PURE__*/React.createElement(Btn, {
     tone: "solid",
     onClick: finish,
     style: {
@@ -2096,7 +2112,8 @@ function History({
   roster,
   reopen,
   remove,
-  readOnly
+  readOnly,
+  openConv
 }) {
   const [filter, setFilter] = useState("tutte");
   const list = matches.filter(m => m.status === "done").filter(m => filter === "tutte" || m.type === filter).slice().sort((a, b) => a.date < b.date ? 1 : -1);
@@ -2171,6 +2188,14 @@ function History({
     }, "Gol: ", sc.join(", ")), !readOnly && /*#__PURE__*/React.createElement("div", {
       className: "flex gap2 mt3"
     }, /*#__PURE__*/React.createElement(Btn, {
+      tone: "ghost",
+      onClick: () => openConv(m.id),
+      style: {
+        flex: 1,
+        padding: "9px 0",
+        fontSize: 13
+      }
+    }, "Convocazione"), /*#__PURE__*/React.createElement(Btn, {
       tone: "ghost",
       onClick: () => reopen(m.id),
       style: {
@@ -2753,7 +2778,10 @@ function App() {
   async function carica(silenzioso) {
     try {
       if (cloud) {
-        const remoto = await cloudLoad();
+        const riga = await cloudLoad();
+        const remoto = riga ? riga.dati : null;
+        const quando = riga && riga.aggiornato ? new Date(riga.aggiornato).toLocaleString("it-IT") : null;
+        const conta = x => x ? (x.roster || []).length + " giocatori, " + (x.matches || []).length + " gare" : "niente";
         const locale = localLoad();
         const scelto = !vuoto(remoto) ? remoto : !vuoto(locale) ? locale : remoto || locale || emptyDB;
         setDb({
@@ -2766,9 +2794,9 @@ function App() {
             ...emptyDB,
             ...locale
           }, chiave).catch(() => {});
-          setStato("Dati di questo telefono caricati online. Ora sono visibili a chi ha il link.");
+          setStato("Sul server c'era una scheda vuota: sto caricando i dati di questo telefono.");
         } else {
-          setStato("Collegata al cloud: i dati sono online e visibili a chi ha il link.");
+          setStato("Sul server: " + conta(remoto) + (quando ? ", aggiornato il " + quando : "") + ". In memoria qui: " + conta(locale) + ".");
         }
       } else {
         setDb({
@@ -2842,6 +2870,7 @@ function App() {
     try {
       await cloudSave(db, k);
       setPending(false);
+      setTimeout(() => carica(true), 800);
       return "ok";
     } catch (e) {
       setPending(true);
@@ -2892,7 +2921,13 @@ function App() {
     match: find(screen.id),
     roster: db.roster,
     readOnly: readOnly,
-    onBack: () => setScreen(null),
+    onBack: () => {
+      const mm = find(screen.id);
+      setScreen(mm && mm.status === "live" ? {
+        name: "live",
+        id: screen.id
+      } : null);
+    },
     onEdit: () => setScreen({
       name: "form",
       id: screen.id
@@ -2922,6 +2957,10 @@ function App() {
     update: upsert,
     readOnly: readOnly,
     onBack: () => setScreen(null),
+    onConvocazione: () => setScreen({
+      name: "conv",
+      id: screen.id
+    }),
     finish: () => {
       const m = find(screen.id);
       const stints = (m.stints || []).map(x => x.to == null ? {
@@ -2973,7 +3012,11 @@ function App() {
         id
       });
     },
-    remove: drop
+    remove: drop,
+    openConv: id => setScreen({
+      name: "conv",
+      id
+    })
   });else if (tab === "stats") body = /*#__PURE__*/React.createElement(Stats, {
     roster: db.roster,
     matches: db.matches
