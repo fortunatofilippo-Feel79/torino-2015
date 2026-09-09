@@ -2856,6 +2856,13 @@ function Team({
   const [testo, setTesto] = useState("");
   const [chiave, setChiave] = useState(localStorage.getItem(KKEY) || "");
   const [msg, setMsg] = useState("");
+  const masterSalvato = (() => {
+    try {
+      return !!localStorage.getItem(MKEY);
+    } catch (e) {
+      return false;
+    }
+  })();
   const [cat2, setCat2] = useState(CAT);
   const [club2, setClub2] = useState(CLUB);
   const linkSquadra = (() => {
@@ -3083,7 +3090,7 @@ function Team({
       fontSize: 14,
       marginTop: 12
     }
-  }, msg), cloud && MODO_ADMIN && /*#__PURE__*/React.createElement(Amministrazione, null), admin && !cloud && /*#__PURE__*/React.createElement("div", {
+  }, msg), cloud && admin && (MODO_ADMIN || masterSalvato) && /*#__PURE__*/React.createElement(Amministrazione, null), admin && !cloud && /*#__PURE__*/React.createElement("div", {
     className: "mt5"
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -3414,7 +3421,7 @@ function Amministrazione() {
       try {
         localStorage.setItem(MKEY, master.trim());
       } catch (e) {}
-      setMsg("Annata " + id.trim() + " creata. Link: " + location.origin + location.pathname + "?squadra=" + id.trim());
+      setMsg("Annata " + id.trim() + " creata. Link da mandare al dirigente: " + location.origin + location.pathname + "?squadra=" + id.trim() + "  —  da adesso questo pannello resta disponibile su questo telefono, senza aggiungere admin all'indirizzo.");
       setId("");
       setChiave("");
       setGara("");
@@ -3501,7 +3508,21 @@ function Amministrazione() {
       marginTop: 12,
       wordBreak: "break-all"
     }
-  }, msg));
+  }, msg), /*#__PURE__*/React.createElement("div", {
+    className: "mt3"
+  }, /*#__PURE__*/React.createElement(Btn, {
+    tone: "ghost",
+    style: {
+      width: "100%",
+      fontSize: 13
+    },
+    onClick: () => {
+      try {
+        localStorage.removeItem(MKEY);
+      } catch (e) {}
+      location.href = location.pathname + "?squadra=" + (SQ ? SQ.id : "");
+    }
+  }, "Esci dall'amministrazione su questo telefono")));
 }
 function Benvenuto() {
   const [cat, setCat] = useState("");
