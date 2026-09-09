@@ -45,7 +45,14 @@
 window.CONFIG = {
   SUPABASE_URL: "https://wsedwqqqagmfuciuxiix.supabase.co",
   SUPABASE_ANON_KEY: "sb_publishable_WDWlGh3x6YM7SBoVD0x1vw_SXd7LBm1",
-  SQUADRA_ID: "2015"
+
+  // Una riga per squadra. L'id deve corrispondere a quello nel database.
+  // Link dedicato per i genitori:  .../torino-2015/?squadra=2014
+  SQUADRE: [
+    { id: "2015", nome: "2015" }
+    // Per aggiungere un'annata: una riga qui, piu la riga in "stato" e in "chiavi" sul database
+    // , { id: "2014", nome: "2014" }
+  ]
 };
 </script>
 
@@ -368,13 +375,71 @@ function(a,b,c){if(!Vd(b))throw Error(n(200));return Wd(null,a,b,!1,c)};Q.unmoun
    ============================================================ */
 const CONFIG = window.CONFIG || {
   SUPABASE_URL: "",
-  SUPABASE_ANON_KEY: "",
-  SQUADRA_ID: "2015"
+  SUPABASE_ANON_KEY: ""
 };
-const CLUB = "Torino Club MP";
+const cloud = !!(CONFIG.SUPABASE_URL && CONFIG.SUPABASE_ANON_KEY);
+
+// Senza server, l'app si configura da sola alla prima apertura
+const SETUP = (() => {
+  try {
+    return JSON.parse(localStorage.getItem("torinoMP:setup") || "null");
+  } catch (e) {
+    return null;
+  }
+})();
+const SQUADRE = cloud ? CONFIG.SQUADRE && CONFIG.SQUADRE.length ? CONFIG.SQUADRE : [{
+  id: CONFIG.SQUADRA_ID || "2015",
+  nome: CONFIG.SQUADRA_ID || "2015"
+}] : [{
+  id: SETUP && SETUP.cat || "squadra",
+  nome: SETUP && SETUP.cat || ""
+}];
+const SQ = (() => {
+  if (!cloud) return SQUADRE[0];
+  let p = null,
+    u = null;
+  try {
+    p = new URLSearchParams(location.search).get("squadra");
+  } catch (e) {}
+  try {
+    u = localStorage.getItem("torinoMP:squadra");
+  } catch (e) {}
+  const q = SQUADRE.find(x => x.id === p) || SQUADRE.find(x => x.id === u) || (SQUADRE.length === 1 ? SQUADRE[0] : null);
+  if (q) {
+    try {
+      localStorage.setItem("torinoMP:squadra", q.id);
+    } catch (e) {}
+  }
+  return q;
+})();
+const CAT = SQ ? SQ.nome || SQ.id : "";
+const CLUB = SETUP && SETUP.club || "Torino Club MP";
+const BKEY = "torinoMP:ultimoBackup:" + (SQ ? SQ.id : "none");
+const GKEY = "torinoMP:gara:" + (SQ ? SQ.id : "none");
+const MODO_AIUTANTE = (() => {
+  try {
+    return new URLSearchParams(location.search).get("aiutante") === "1";
+  } catch (e) {
+    return false;
+  }
+})();
+const chiaveAttiva = () => {
+  try {
+    return localStorage.getItem(KKEY) || localStorage.getItem(GKEY) || "";
+  } catch (e) {
+    return "";
+  }
+};
 const LOGO = "data:image/png;base64,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";
-const LKEY = "torinoMP2015:db";
-const KKEY = "torinoMP2015:chiave";
+const LKEY = "torinoMP:db:" + (SQ ? SQ.id : "none");
+const KKEY = "torinoMP:chiave:" + (SQ ? SQ.id : "none");
+// recupero di quanto salvato prima che l'app gestisse piu squadre
+try {
+  if (SQ && SQ.id === "2015") {
+    if (!localStorage.getItem(LKEY) && localStorage.getItem("torinoMP2015:db")) localStorage.setItem(LKEY, localStorage.getItem("torinoMP2015:db"));
+    if (!localStorage.getItem(KKEY) && localStorage.getItem("torinoMP2015:chiave")) localStorage.setItem(KKEY, localStorage.getItem("torinoMP2015:chiave"));
+  }
+} catch (e) {}
 const C = {
   gr: "#922F29",
   deep: "#6E211C",
@@ -452,14 +517,13 @@ const outcome = m => {
 
 /* ---------------- storage ---------------- */
 
-const cloud = !!(CONFIG.SUPABASE_URL && CONFIG.SUPABASE_ANON_KEY);
 const H = () => ({
   apikey: CONFIG.SUPABASE_ANON_KEY,
   Authorization: "Bearer " + CONFIG.SUPABASE_ANON_KEY,
   "Content-Type": "application/json"
 });
 async function cloudLoad() {
-  const r = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/stato?id=eq.${CONFIG.SQUADRA_ID}&select=dati,aggiornato`, {
+  const r = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/stato?id=eq.${SQ ? SQ.id : ""}&select=dati,aggiornato`, {
     headers: H()
   });
   if (!r.ok) throw new Error("lettura non riuscita");
@@ -471,7 +535,7 @@ async function cloudSave(db, chiave) {
     method: "POST",
     headers: H(),
     body: JSON.stringify({
-      p_id: CONFIG.SQUADRA_ID,
+      p_id: SQ ? SQ.id : "",
       p_chiave: chiave || "",
       p_dati: db
     })
@@ -1086,7 +1150,8 @@ function ConvDetail({
   onEdit,
   onStart,
   onDelete,
-  readOnly
+  readOnly,
+  puoAvviare
 }) {
   const [copied, setCopied] = useState(false);
   const [img, setImg] = useState("");
@@ -1203,7 +1268,7 @@ function ConvDetail({
   };
   return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Header, {
     title: "Convocazione",
-    sub: CLUB,
+    sub: CLUB + " · " + CAT,
     onBack: onBack
   }), /*#__PURE__*/React.createElement("div", {
     className: "px4 py5"
@@ -1233,14 +1298,14 @@ function ConvDetail({
       borderRadius: 14,
       border: "1px solid " + C.line
     }
-  }), !readOnly && match.status === "convocata" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }), !readOnly && match.status === "convocata" && /*#__PURE__*/React.createElement("div", {
     className: "grid g2 gap2 mt5"
   }, /*#__PURE__*/React.createElement(Btn, {
     onClick: onEdit
   }, "Modifica"), /*#__PURE__*/React.createElement(Btn, {
     tone: "ghost",
     onClick: onDelete
-  }, "Elimina")), /*#__PURE__*/React.createElement("div", {
+  }, "Elimina")), puoAvviare && match.status === "convocata" && /*#__PURE__*/React.createElement("div", {
     className: "mt3"
   }, /*#__PURE__*/React.createElement(Btn, {
     tone: "solid",
@@ -1249,7 +1314,7 @@ function ConvDetail({
       width: "100%",
       padding: "16px 0"
     }
-  }, "Inizia la partita"))), match.status !== "convocata" && /*#__PURE__*/React.createElement("div", {
+  }, "Inizia la partita")), match.status !== "convocata" && /*#__PURE__*/React.createElement("div", {
     className: "mt5"
   }, /*#__PURE__*/React.createElement(Btn, {
     tone: "solid",
@@ -2076,7 +2141,7 @@ function Gare({
   const list = matches.filter(m => m.status !== "done").slice().sort((a, b) => a.date > b.date ? 1 : -1);
   return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Header, {
     title: "Gare",
-    sub: CLUB
+    sub: CLUB + " · " + CAT
   }), /*#__PURE__*/React.createElement("div", {
     className: "px4 py5"
   }, !readOnly && /*#__PURE__*/React.createElement(Btn, {
@@ -2158,7 +2223,7 @@ function History({
   const list = matches.filter(m => m.status === "done").filter(m => filter === "tutte" || m.type === filter).slice().sort((a, b) => a.date < b.date ? 1 : -1);
   return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Header, {
     title: "Storico",
-    sub: CLUB
+    sub: CLUB + " · " + CAT
   }), /*#__PURE__*/React.createElement("div", {
     className: "px4 py5"
   }, /*#__PURE__*/React.createElement("div", {
@@ -2295,7 +2360,7 @@ function Stats({
       x.fillText(CLUB, 245, 120);
       x.fillStyle = C.dim;
       x.font = F(30, 500);
-      x.fillText(`Statistiche 2015 · ${s.total} partite`, 245, 172);
+      x.fillText(`Statistiche ${CAT} · ${s.total} partite`, 245, 172);
       x.fillStyle = C.txt;
       x.font = F(34, 700);
       x.fillText(`${s.v}V  ${s.n}N  ${s.s}P   ·   gol ${s.gf}:${s.gs}`, 245, 225);
@@ -2356,12 +2421,12 @@ function Stats({
       rows.push([i + 1, fmtDate(m.date), typeLabel(m), m.opponent, m.home ? "Casa" : "Trasferta", m.periods, m.durata || 15, u, t, sc]);
     });
     const csv = "\uFEFF" + rows.map(r => r.map(c => `"${String(c == null ? "" : c).replace(/"/g, '""')}"`).join(";")).join("\r\n");
-    download(csv, "statistiche-2015.csv", "text/csv;charset=utf-8;");
+    download(csv, `statistiche-${CAT}.csv`, "text/csv;charset=utf-8;");
   }
   const media = x => s.total ? (x / s.total).toFixed(1).replace(".", ",") : "0";
   return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Header, {
     title: "Statistiche",
-    sub: `${CLUB} · ${s.total} partite`
+    sub: `${CLUB} · ${CAT} · ${s.total} partite`
   }), /*#__PURE__*/React.createElement("div", {
     className: "px4 py5"
   }, /*#__PURE__*/React.createElement("div", {
@@ -2375,7 +2440,7 @@ function Stats({
       fontWeight: 800,
       color: C.gr
     }
-  }, CLUB, " — Statistiche 2015"), /*#__PURE__*/React.createElement("div", {
+  }, CLUB, " — Statistiche ", CAT), /*#__PURE__*/React.createElement("div", {
     style: {
       color: C.dim,
       fontSize: 13
@@ -2542,24 +2607,38 @@ function Stats({
       fontSize: 12,
       marginTop: 6
     }
-  }, "A sinistra i gol fatti, a destra quelli subiti."), s.inRete.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }, "A sinistra i gol fatti, a destra quelli subiti."), marcatori.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 16,
       fontWeight: 800,
       margin: "24px 0 8px"
     }
-  }, "Sono andati a segno"), /*#__PURE__*/React.createElement("div", {
+  }, "Marcatori"), marcatori.map((p, i) => /*#__PURE__*/React.createElement("div", {
+    key: p.id,
+    className: "flex ic jb py2",
     style: {
-      fontSize: 15,
-      lineHeight: 1.6
+      borderBottom: "1px solid " + C.line,
+      fontSize: 15
     }
-  }, s.inRete.join(" · ")), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("span", null, /*#__PURE__*/React.createElement("span", {
+    className: "num",
+    style: {
+      color: C.dim,
+      marginRight: 10
+    }
+  }, i + 1), p.name), /*#__PURE__*/React.createElement("span", {
+    className: "num",
+    style: {
+      color: C.gr,
+      fontWeight: 800
+    }
+  }, p.gol))), /*#__PURE__*/React.createElement("div", {
     style: {
       color: C.dim,
       fontSize: 12,
       marginTop: 6
     }
-  }, s.inRete.length, " ragazzi diversi su ", s.convocatiMai, " convocati.")), !readOnly && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }, s.inRete.length, " ragazzi diversi sono andati a segno su ", s.convocatiMai, " convocati.")), !readOnly && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       borderTop: "2px solid " + C.gr,
       margin: "28px 0 0"
@@ -2693,31 +2772,7 @@ function Stats({
       fontSize: 12,
       marginTop: 8
     }
-  }, "Impiego = minuti giocati sul totale dei minuti delle partite in cui era convocato."), marcatori.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 16,
-      fontWeight: 800,
-      margin: "24px 0 8px"
-    }
-  }, "Marcatori"), marcatori.map((p, i) => /*#__PURE__*/React.createElement("div", {
-    key: p.id,
-    className: "flex ic jb py2",
-    style: {
-      borderBottom: "1px solid " + C.line,
-      fontSize: 15
-    }
-  }, /*#__PURE__*/React.createElement("span", null, /*#__PURE__*/React.createElement("span", {
-    style: {
-      color: C.dim,
-      marginRight: 10
-    }
-  }, i + 1), p.name), /*#__PURE__*/React.createElement("span", {
-    className: "num",
-    style: {
-      color: C.gr,
-      fontWeight: 800
-    }
-  }, p.gol)))), /*#__PURE__*/React.createElement("div", {
+  }, "Impiego = minuti giocati sul totale dei minuti delle partite in cui era convocato."), /*#__PURE__*/React.createElement("div", {
     className: "noprint mt5"
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -2739,7 +2794,7 @@ function Stats({
     style: {
       width: "100%"
     },
-    onClick: () => condividiPNG(img, "statistiche-2015.png", "Statistiche 2015")
+    onClick: () => condividiPNG(img, `statistiche-${CAT}.png`, "Statistiche " + CAT)
   }, img ? "Immagine per WhatsApp" : "Preparo l'immagine…")), /*#__PURE__*/React.createElement("div", {
     style: {
       color: C.dim,
@@ -2774,6 +2829,24 @@ function Team({
   const [testo, setTesto] = useState("");
   const [chiave, setChiave] = useState(localStorage.getItem(KKEY) || "");
   const [msg, setMsg] = useState("");
+  const [cat2, setCat2] = useState(CAT);
+  const [club2, setClub2] = useState(CLUB);
+  const linkAiutante = (() => {
+    try {
+      return location.origin + location.pathname + "?squadra=" + (SQ ? SQ.id : "") + "&aiutante=1";
+    } catch (e) {
+      return "";
+    }
+  })();
+  const ultimoBk = (() => {
+    try {
+      const v = localStorage.getItem(BKEY);
+      return v ? Number(v) : 0;
+    } catch (e) {
+      return 0;
+    }
+  })();
+  const scaduto = !ultimoBk || Date.now() - ultimoBk > 30 * 24 * 3600 * 1000;
   const add = () => {
     if (!name.trim()) return;
     setRoster([...roster, {
@@ -2799,7 +2872,7 @@ function Team({
   }
   return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Header, {
     title: "Squadra",
-    sub: `${CLUB} · 2015`
+    sub: `${CLUB} · ${CAT}`
   }), /*#__PURE__*/React.createElement("div", {
     className: "px4 py5"
   }, !admin && /*#__PURE__*/React.createElement("div", {
@@ -2851,7 +2924,77 @@ function Team({
       fontSize: 20,
       cursor: "pointer"
     }
-  }, "×"))), cloud && /*#__PURE__*/React.createElement("div", {
+  }, "×"))), SQUADRE.length > 1 && /*#__PURE__*/React.createElement("div", {
+    className: "mt5"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 13,
+      marginBottom: 8
+    }
+  }, "Squadra in uso"), /*#__PURE__*/React.createElement("div", {
+    className: "flex gap2"
+  }, SQUADRE.map(q => {
+    const on = q.id === SQ.id;
+    return /*#__PURE__*/React.createElement("button", {
+      key: q.id,
+      onClick: () => {
+        if (!on) location.href = location.pathname + "?squadra=" + q.id;
+      },
+      style: {
+        flex: 1,
+        padding: "12px 0",
+        borderRadius: 10,
+        fontSize: 14,
+        fontWeight: 700,
+        cursor: "pointer",
+        background: on ? C.gr : "#fff",
+        color: on ? "#fff" : C.dim,
+        border: "1px solid " + (on ? C.gr : C.line)
+      }
+    }, q.nome || q.id);
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 12,
+      marginTop: 6
+    }
+  }, "Ogni squadra ha dati, chiave e link propri. Il link dedicato è ", location.pathname, "?squadra=", SQ.id)), admin && cloud && /*#__PURE__*/React.createElement("div", {
+    className: "mt5"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 16,
+      fontWeight: 800,
+      marginBottom: 8
+    }
+  }, "Aiutante per una gara"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 13,
+      marginBottom: 10,
+      lineHeight: 1.5
+    }
+  }, "Se non puoi esserci, manda questo link a chi registra la partita, e a parte il codice gara. Vedrà solo punteggio, cronometro e cambi."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.sur,
+      border: "1px solid " + C.line,
+      borderRadius: 10,
+      padding: 12,
+      fontSize: 13,
+      wordBreak: "break-all",
+      marginBottom: 8
+    }
+  }, linkAiutante), /*#__PURE__*/React.createElement(Btn, {
+    onClick: () => {
+      try {
+        navigator.clipboard.writeText(linkAiutante);
+        setMsg("Link per l'aiutante copiato.");
+      } catch (e) {}
+    },
+    style: {
+      width: "100%"
+    }
+  }, "Copia il link")), cloud && /*#__PURE__*/React.createElement("div", {
     className: "mt5"
   }, /*#__PURE__*/React.createElement(Field, {
     label: admin ? "Chiave di scrittura" : "Chiave di scrittura (solo per il dirigente)"
@@ -2894,7 +3037,43 @@ function Team({
       fontSize: 14,
       marginTop: 12
     }
-  }, msg), admin && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }, msg), admin && !cloud && /*#__PURE__*/React.createElement("div", {
+    className: "mt5"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 16,
+      fontWeight: 800,
+      marginBottom: 10
+    }
+  }, "Annata e società"), /*#__PURE__*/React.createElement(Field, {
+    label: "Annata"
+  }, /*#__PURE__*/React.createElement("input", {
+    style: inp,
+    value: cat2,
+    onChange: e => setCat2(e.target.value)
+  })), /*#__PURE__*/React.createElement(Field, {
+    label: "Società"
+  }, /*#__PURE__*/React.createElement("input", {
+    style: inp,
+    value: club2,
+    onChange: e => setClub2(e.target.value)
+  })), /*#__PURE__*/React.createElement(Btn, {
+    onClick: () => {
+      const c = cat2.trim();
+      if (!c) return;
+      try {
+        localStorage.setItem("torinoMP:db:" + c, JSON.stringify(db));
+        localStorage.setItem("torinoMP:setup", JSON.stringify({
+          cat: c,
+          club: club2.trim() || "Torino Club MP"
+        }));
+      } catch (e) {}
+      location.reload();
+    },
+    style: {
+      width: "100%"
+    }
+  }, "Salva")), admin && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 16,
       fontWeight: 800,
@@ -2902,19 +3081,34 @@ function Team({
     }
   }, "Backup e sincronizzazione"), /*#__PURE__*/React.createElement("div", {
     style: {
-      background: C.sur,
-      border: "1px solid " + C.line,
+      background: scaduto ? C.tint : C.sur,
+      border: "1px solid " + (scaduto ? C.gr : C.line),
       borderRadius: 12,
       padding: 14,
       fontSize: 14,
       marginBottom: 12
     }
-  }, stato), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", null, stato), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: scaduto ? C.gr : C.dim,
+      fontSize: 13,
+      marginTop: 6,
+      fontWeight: scaduto ? 700 : 400
+    }
+  }, ultimoBk ? "Ultimo backup: " + new Date(ultimoBk).toLocaleDateString("it-IT") : "Non hai mai salvato un backup.", scaduto ? " Conviene rifarlo adesso." : "")), /*#__PURE__*/React.createElement("div", {
     className: "grid g2 gap2"
   }, /*#__PURE__*/React.createElement(Btn, {
-    onClick: () => download(JSON.stringify(db, null, 2), `backup-2015-${new Date().toISOString().slice(0, 10)}.json`, "application/json")
+    onClick: () => {
+      try {
+        localStorage.setItem(BKEY, String(Date.now()));
+      } catch (e) {}
+      download(JSON.stringify(db, null, 2), `backup-${CAT}-${new Date().toISOString().slice(0, 10)}.json`, "application/json");
+    }
   }, "Scarica backup"), /*#__PURE__*/React.createElement(Btn, {
     onClick: () => {
+      try {
+        localStorage.setItem(BKEY, String(Date.now()));
+      } catch (e) {}
       try {
         navigator.clipboard.writeText(JSON.stringify(db));
         setMsg("Backup copiato. Incollalo in una nota o mandatelo per mail: quel testo e' l'archivio completo.");
@@ -2971,6 +3165,228 @@ function Team({
     }
   }, "Importa e sostituisci")))));
 }
+function SbloccaAiutante({
+  verifica
+}) {
+  const [cod, setCod] = useState("");
+  const [msg, setMsg] = useState("");
+  const [attesa, setAttesa] = useState(false);
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      minHeight: "100vh",
+      background: "#fff"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.gr,
+      color: "#fff",
+      padding: "30px 16px",
+      textAlign: "center"
+    }
+  }, /*#__PURE__*/React.createElement("img", {
+    src: LOGO,
+    alt: "",
+    style: {
+      width: 72,
+      height: 78
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 21,
+      fontWeight: 800,
+      marginTop: 10
+    }
+  }, CLUB, " · ", CAT), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      opacity: .85,
+      marginTop: 2
+    }
+  }, "Modalità aiutante")), /*#__PURE__*/React.createElement("div", {
+    className: "px4 py5"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 15,
+      marginBottom: 18,
+      lineHeight: 1.5
+    }
+  }, "Inserisci il codice che ti ha dato il dirigente. Ti serve solo per registrare punteggio, cambi e minuti della partita di oggi."), /*#__PURE__*/React.createElement(Field, {
+    label: "Codice della gara"
+  }, /*#__PURE__*/React.createElement("input", {
+    style: inp,
+    value: cod,
+    onChange: e => setCod(e.target.value),
+    placeholder: "il codice ricevuto"
+  })), /*#__PURE__*/React.createElement(Btn, {
+    tone: "solid",
+    disabled: !cod.trim() || attesa,
+    style: {
+      width: "100%",
+      padding: "16px 0"
+    },
+    onClick: async () => {
+      setAttesa(true);
+      setMsg("Controllo…");
+      const r = await verifica(cod.trim());
+      setAttesa(false);
+      if (r !== "ok") setMsg("Codice non valido: " + r);
+    }
+  }, "Entra"), msg && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.gr,
+      fontSize: 14,
+      marginTop: 14
+    }
+  }, msg)));
+}
+function ScegliSquadra() {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      minHeight: "100vh",
+      background: "#fff"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.gr,
+      color: "#fff",
+      padding: "30px 16px",
+      textAlign: "center"
+    }
+  }, /*#__PURE__*/React.createElement("img", {
+    src: LOGO,
+    alt: "",
+    style: {
+      width: 72,
+      height: 78
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 21,
+      fontWeight: 800,
+      marginTop: 10
+    }
+  }, CLUB), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      opacity: .85,
+      marginTop: 2
+    }
+  }, "Gestione partite")), /*#__PURE__*/React.createElement("div", {
+    className: "px4 py5"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 16,
+      fontWeight: 800,
+      marginBottom: 6
+    }
+  }, "Quale annata segui?"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 14,
+      marginBottom: 18
+    }
+  }, "Te lo chiedo una volta sola. Potrai cambiarla dalla scheda Squadra."), /*#__PURE__*/React.createElement("div", {
+    className: "grid g2 gap2"
+  }, SQUADRE.map(q => /*#__PURE__*/React.createElement("button", {
+    key: q.id,
+    onClick: () => {
+      try {
+        localStorage.setItem("torinoMP:squadra", q.id);
+      } catch (e) {}
+      location.href = location.pathname + "?squadra=" + q.id;
+    },
+    style: {
+      padding: "18px 12px",
+      borderRadius: 12,
+      fontSize: 18,
+      fontWeight: 800,
+      cursor: "pointer",
+      background: "#fff",
+      color: C.txt,
+      border: "1px solid " + C.line
+    }
+  }, q.nome || q.id)))));
+}
+function Benvenuto() {
+  const [cat, setCat] = useState("");
+  const [club, setClub] = useState("Torino Club MP");
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      minHeight: "100vh",
+      background: "#fff"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.gr,
+      color: "#fff",
+      padding: "30px 16px",
+      textAlign: "center"
+    }
+  }, /*#__PURE__*/React.createElement("img", {
+    src: LOGO,
+    alt: "",
+    style: {
+      width: 72,
+      height: 78
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 21,
+      fontWeight: 800,
+      marginTop: 10
+    }
+  }, "Gestione partite"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      opacity: .85,
+      marginTop: 2
+    }
+  }, "Convocazioni, cronometro, minuti e statistiche")), /*#__PURE__*/React.createElement("div", {
+    className: "px4 py5"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 15,
+      marginBottom: 20,
+      lineHeight: 1.5
+    }
+  }, "Due informazioni e sei operativo. Restano su questo telefono e le puoi cambiare quando vuoi."), /*#__PURE__*/React.createElement(Field, {
+    label: "Annata che segui"
+  }, /*#__PURE__*/React.createElement("input", {
+    style: inp,
+    value: cat,
+    onChange: e => setCat(e.target.value),
+    placeholder: "es. 2013"
+  })), /*#__PURE__*/React.createElement(Field, {
+    label: "Società"
+  }, /*#__PURE__*/React.createElement("input", {
+    style: inp,
+    value: club,
+    onChange: e => setClub(e.target.value)
+  })), /*#__PURE__*/React.createElement(Btn, {
+    tone: "solid",
+    disabled: !cat.trim(),
+    style: {
+      width: "100%",
+      padding: "16px 0"
+    },
+    onClick: () => {
+      try {
+        localStorage.setItem("torinoMP:setup", JSON.stringify({
+          cat: cat.trim(),
+          club: club.trim() || "Torino Club MP"
+        }));
+      } catch (e) {}
+      location.reload();
+    }
+  }, "Inizia"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 12,
+      marginTop: 16,
+      lineHeight: 1.5
+    }
+  }, "I dati restano solo qui: nessun account, nessuna password. Aggiungi l'app alla schermata Home e ogni tanto salva un backup dalla scheda Squadra.")));
+}
 
 /* ---------------- app ---------------- */
 
@@ -2981,6 +3397,13 @@ function App() {
   const [admin, setAdmin] = useState(!cloud || !!localStorage.getItem(KKEY));
   const [stato, setStato] = useState("");
   const [pending, setPending] = useState(false);
+  const [operatore, setOperatore] = useState(() => {
+    try {
+      return !!localStorage.getItem(GKEY);
+    } catch (e) {
+      return false;
+    }
+  });
   const first = useRef(true);
   async function carica(silenzioso) {
     try {
@@ -3037,8 +3460,8 @@ function App() {
       return;
     }
     localSave(db);
-    if (cloud && admin) {
-      cloudSave(db, localStorage.getItem(KKEY) || "").then(() => setPending(false)).catch(e => {
+    if (cloud && (admin || operatore)) {
+      cloudSave(db, chiaveAttiva()).then(() => setPending(false)).catch(e => {
         setPending(true);
         setStato("Non salvato online (" + e.message + "). La copia locale è al sicuro.");
       });
@@ -3047,10 +3470,15 @@ function App() {
 
   // i genitori vedono la partita aggiornarsi da sola
   useEffect(() => {
-    if (!cloud || admin) return;
+    if (!cloud || admin || operatore) return;
     const t = setInterval(() => carica(true), 10000);
     return () => clearInterval(t);
-  }, [admin]);
+  }, [admin, operatore]);
+  if (!cloud && !SETUP) return /*#__PURE__*/React.createElement(Benvenuto, null);
+  if (cloud && !SQ) return /*#__PURE__*/React.createElement(ScegliSquadra, null);
+  if (cloud && MODO_AIUTANTE && !operatore && db) return /*#__PURE__*/React.createElement(SbloccaAiutante, {
+    verifica: verificaCodice
+  });
   if (!db) return /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
@@ -3070,6 +3498,22 @@ function App() {
     matches: db.matches.filter(m => m.id !== id)
   });
   const live = db.matches.find(m => m.status === "live");
+  async function verificaCodice(codice) {
+    if (!cloud) return "questa copia non è collegata al server";
+    try {
+      localStorage.setItem(GKEY, codice);
+    } catch (e) {}
+    try {
+      await cloudSave(db, codice);
+      setOperatore(true);
+      return "ok";
+    } catch (e) {
+      try {
+        localStorage.removeItem(GKEY);
+      } catch (x) {}
+      return e.message || "codice rifiutato";
+    }
+  }
   async function sincronizza() {
     if (!cloud) return "Il file non ha la configurazione del server.";
     const k = localStorage.getItem(KKEY) || "";
@@ -3128,6 +3572,7 @@ function App() {
     match: find(screen.id),
     roster: db.roster,
     readOnly: readOnly,
+    puoAvviare: admin || operatore,
     onBack: () => {
       const mm = find(screen.id);
       setScreen(mm && mm.status === "live" ? {
@@ -3162,7 +3607,7 @@ function App() {
     match: find(screen.id),
     roster: db.roster,
     update: upsert,
-    readOnly: readOnly,
+    readOnly: readOnly && !operatore,
     onBack: () => setScreen(null),
     onConvocazione: () => setScreen({
       name: "conv",
@@ -3251,7 +3696,33 @@ function App() {
     style: {
       flex: 1
     }
-  }, pending && /*#__PURE__*/React.createElement("div", {
+  }, operatore && !admin && /*#__PURE__*/React.createElement("div", {
+    className: "noprint flex ic jb",
+    style: {
+      background: C.gr,
+      color: "#fff",
+      fontSize: 13,
+      padding: "10px 16px",
+      fontWeight: 700
+    }
+  }, /*#__PURE__*/React.createElement("span", null, "Modalità aiutante · puoi gestire solo la partita"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      try {
+        localStorage.removeItem(GKEY);
+      } catch (e) {}
+      setOperatore(false);
+    },
+    style: {
+      background: "rgba(255,255,255,.2)",
+      border: "none",
+      color: "#fff",
+      borderRadius: 6,
+      padding: "4px 10px",
+      fontSize: 12,
+      fontWeight: 700,
+      cursor: "pointer"
+    }
+  }, "Esci")), pending && /*#__PURE__*/React.createElement("div", {
     className: "noprint",
     style: {
       background: C.tint,
