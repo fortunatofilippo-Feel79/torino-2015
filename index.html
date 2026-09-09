@@ -387,10 +387,7 @@ const SETUP = (() => {
     return null;
   }
 })();
-const SQUADRE = cloud ? CONFIG.SQUADRE && CONFIG.SQUADRE.length ? CONFIG.SQUADRE : [{
-  id: CONFIG.SQUADRA_ID || "2015",
-  nome: CONFIG.SQUADRA_ID || "2015"
-}] : [{
+const SQUADRE = cloud ? [] : [{
   id: SETUP && SETUP.cat || "squadra",
   nome: SETUP && SETUP.cat || ""
 }];
@@ -404,13 +401,15 @@ const SQ = (() => {
   try {
     u = localStorage.getItem("torinoMP:squadra");
   } catch (e) {}
-  const q = SQUADRE.find(x => x.id === p) || SQUADRE.find(x => x.id === u) || (SQUADRE.length === 1 ? SQUADRE[0] : null);
-  if (q) {
-    try {
-      localStorage.setItem("torinoMP:squadra", q.id);
-    } catch (e) {}
-  }
-  return q;
+  const id = p && p.trim() || u && u.trim() || null;
+  if (!id) return null;
+  try {
+    localStorage.setItem("torinoMP:squadra", id);
+  } catch (e) {}
+  return {
+    id,
+    nome: id
+  };
 })();
 const CAT = SQ ? SQ.nome || SQ.id : "";
 const CLUB = SETUP && SETUP.club || "Torino Club MP";
@@ -423,6 +422,14 @@ const MODO_AIUTANTE = (() => {
     return false;
   }
 })();
+const MODO_ADMIN = (() => {
+  try {
+    return new URLSearchParams(location.search).get("admin") === "1";
+  } catch (e) {
+    return false;
+  }
+})();
+const MKEY = "torinoMP:master";
 const chiaveAttiva = () => {
   try {
     return localStorage.getItem(KKEY) || localStorage.getItem(GKEY) || "";
@@ -541,6 +548,26 @@ async function cloudSave(db, chiave) {
     })
   });
   if (!r.ok) throw new Error(r.status === 400 ? "chiave di scrittura non valida" : "salvataggio non riuscito");
+}
+async function elencoSquadre() {
+  const r = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/stato?select=id&order=id`, {
+    headers: H()
+  });
+  if (!r.ok) throw new Error("elenco non disponibile");
+  return (await r.json()).map(x => x.id);
+}
+async function creaSquadra(master, id, chiave, gara) {
+  const r = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/rpc/crea_squadra`, {
+    method: "POST",
+    headers: H(),
+    body: JSON.stringify({
+      p_master: master,
+      p_id: id,
+      p_chiave: chiave,
+      p_gara: gara || null
+    })
+  });
+  if (!r.ok) throw new Error(r.status === 400 ? "password amministratore non valida o dati incompleti" : "creazione non riuscita");
 }
 function localLoad() {
   try {
@@ -2831,6 +2858,13 @@ function Team({
   const [msg, setMsg] = useState("");
   const [cat2, setCat2] = useState(CAT);
   const [club2, setClub2] = useState(CLUB);
+  const linkSquadra = (() => {
+    try {
+      return location.origin + location.pathname + "?squadra=" + (SQ ? SQ.id : "");
+    } catch (e) {
+      return "";
+    }
+  })();
   const linkAiutante = (() => {
     try {
       return location.origin + location.pathname + "?squadra=" + (SQ ? SQ.id : "") + "&aiutante=1";
@@ -2924,7 +2958,7 @@ function Team({
       fontSize: 20,
       cursor: "pointer"
     }
-  }, "×"))), SQUADRE.length > 1 && /*#__PURE__*/React.createElement("div", {
+  }, "×"))), cloud && SQ && /*#__PURE__*/React.createElement("div", {
     className: "mt5"
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -2932,34 +2966,46 @@ function Team({
       fontSize: 13,
       marginBottom: 8
     }
-  }, "Squadra in uso"), /*#__PURE__*/React.createElement("div", {
-    className: "flex gap2"
-  }, SQUADRE.map(q => {
-    const on = q.id === SQ.id;
-    return /*#__PURE__*/React.createElement("button", {
-      key: q.id,
-      onClick: () => {
-        if (!on) location.href = location.pathname + "?squadra=" + q.id;
-      },
-      style: {
-        flex: 1,
-        padding: "12px 0",
-        borderRadius: 10,
-        fontSize: 14,
-        fontWeight: 700,
-        cursor: "pointer",
-        background: on ? C.gr : "#fff",
-        color: on ? "#fff" : C.dim,
-        border: "1px solid " + (on ? C.gr : C.line)
-      }
-    }, q.nome || q.id);
-  })), /*#__PURE__*/React.createElement("div", {
+  }, "Annata in uso"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.sur,
+      border: "1px solid " + C.line,
+      borderRadius: 10,
+      padding: 12,
+      fontSize: 14,
+      wordBreak: "break-all",
+      marginBottom: 8
+    }
+  }, /*#__PURE__*/React.createElement("b", null, SQ.id), /*#__PURE__*/React.createElement("div", {
     style: {
       color: C.dim,
       fontSize: 12,
-      marginTop: 6
+      marginTop: 4
     }
-  }, "Ogni squadra ha dati, chiave e link propri. Il link dedicato è ", location.pathname, "?squadra=", SQ.id)), admin && cloud && /*#__PURE__*/React.createElement("div", {
+  }, linkSquadra)), /*#__PURE__*/React.createElement("div", {
+    className: "flex gap2"
+  }, /*#__PURE__*/React.createElement(Btn, {
+    onClick: () => {
+      try {
+        navigator.clipboard.writeText(linkSquadra);
+        setMsg("Link dell'annata copiato.");
+      } catch (e) {}
+    },
+    style: {
+      flex: 1
+    }
+  }, "Copia il link"), /*#__PURE__*/React.createElement(Btn, {
+    tone: "ghost",
+    onClick: () => {
+      try {
+        localStorage.removeItem("torinoMP:squadra");
+      } catch (e) {}
+      location.href = location.pathname;
+    },
+    style: {
+      flex: 1
+    }
+  }, "Cambia annata"))), admin && cloud && /*#__PURE__*/React.createElement("div", {
     className: "mt5"
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -3037,7 +3083,7 @@ function Team({
       fontSize: 14,
       marginTop: 12
     }
-  }, msg), admin && !cloud && /*#__PURE__*/React.createElement("div", {
+  }, msg), cloud && MODO_ADMIN && /*#__PURE__*/React.createElement(Amministrazione, null), admin && !cloud && /*#__PURE__*/React.createElement("div", {
     className: "mt5"
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -3240,6 +3286,18 @@ function SbloccaAiutante({
   }, msg)));
 }
 function ScegliSquadra() {
+  const [elenco, setElenco] = useState(null);
+  const [manuale, setManuale] = useState("");
+  useEffect(() => {
+    elencoSquadre().then(setElenco).catch(() => setElenco([]));
+  }, []);
+  const vai = id => {
+    if (!id.trim()) return;
+    try {
+      localStorage.setItem("torinoMP:squadra", id.trim());
+    } catch (e) {}
+    location.href = location.pathname + "?squadra=" + encodeURIComponent(id.trim());
+  };
   return /*#__PURE__*/React.createElement("div", {
     style: {
       minHeight: "100vh",
@@ -3285,16 +3343,16 @@ function ScegliSquadra() {
       fontSize: 14,
       marginBottom: 18
     }
-  }, "Te lo chiedo una volta sola. Potrai cambiarla dalla scheda Squadra."), /*#__PURE__*/React.createElement("div", {
+  }, "Te lo chiedo una volta sola. Potrai cambiarla dalla scheda Squadra."), elenco === null && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 15
+    }
+  }, "Carico l'elenco…"), elenco && elenco.length > 0 && /*#__PURE__*/React.createElement("div", {
     className: "grid g2 gap2"
-  }, SQUADRE.map(q => /*#__PURE__*/React.createElement("button", {
-    key: q.id,
-    onClick: () => {
-      try {
-        localStorage.setItem("torinoMP:squadra", q.id);
-      } catch (e) {}
-      location.href = location.pathname + "?squadra=" + q.id;
-    },
+  }, elenco.map(id => /*#__PURE__*/React.createElement("button", {
+    key: id,
+    onClick: () => vai(id),
     style: {
       padding: "18px 12px",
       borderRadius: 12,
@@ -3305,7 +3363,145 @@ function ScegliSquadra() {
       color: C.txt,
       border: "1px solid " + C.line
     }
-  }, q.nome || q.id)))));
+  }, id))), elenco && elenco.length === 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 14,
+      marginBottom: 10
+    }
+  }, "Non riesco a leggere l'elenco. Scrivi l'annata che ti ha indicato il dirigente."), /*#__PURE__*/React.createElement(Field, {
+    label: "Annata"
+  }, /*#__PURE__*/React.createElement("input", {
+    style: inp,
+    value: manuale,
+    onChange: e => setManuale(e.target.value),
+    placeholder: "es. 2013"
+  })), /*#__PURE__*/React.createElement(Btn, {
+    tone: "solid",
+    onClick: () => vai(manuale),
+    style: {
+      width: "100%"
+    }
+  }, "Entra"))));
+}
+function Amministrazione() {
+  const [master, setMaster] = useState(() => {
+    try {
+      return localStorage.getItem(MKEY) || "";
+    } catch (e) {
+      return "";
+    }
+  });
+  const [elenco, setElenco] = useState(null);
+  const [id, setId] = useState("");
+  const [chiave, setChiave] = useState("");
+  const [gara, setGara] = useState("");
+  const [msg, setMsg] = useState("");
+  const [attesa, setAttesa] = useState(false);
+  const ricarica = () => elencoSquadre().then(setElenco).catch(() => setElenco([]));
+  useEffect(() => {
+    ricarica();
+  }, []);
+  async function aggiungi() {
+    if (!master.trim() || !id.trim() || !chiave.trim()) {
+      setMsg("Servono password amministratore, annata e password del dirigente.");
+      return;
+    }
+    setAttesa(true);
+    setMsg("Invio…");
+    try {
+      await creaSquadra(master.trim(), id.trim(), chiave.trim(), gara.trim());
+      try {
+        localStorage.setItem(MKEY, master.trim());
+      } catch (e) {}
+      setMsg("Annata " + id.trim() + " creata. Link: " + location.origin + location.pathname + "?squadra=" + id.trim());
+      setId("");
+      setChiave("");
+      setGara("");
+      ricarica();
+    } catch (e) {
+      setMsg("Non riuscito: " + e.message);
+    }
+    setAttesa(false);
+  }
+  return /*#__PURE__*/React.createElement("div", {
+    className: "mt5",
+    style: {
+      borderTop: "2px solid " + C.gr,
+      paddingTop: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.gr,
+      fontSize: 12,
+      fontWeight: 700,
+      marginBottom: 4
+    }
+  }, "Amministrazione società"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 12,
+      marginBottom: 14
+    }
+  }, "Da qui aggiungi un'annata e la password del suo dirigente, senza toccare file né database."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 15,
+      fontWeight: 700,
+      marginBottom: 8
+    }
+  }, "Annate già presenti"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.sur,
+      border: "1px solid " + C.line,
+      borderRadius: 10,
+      padding: 12,
+      fontSize: 14,
+      marginBottom: 16
+    }
+  }, elenco === null ? "carico…" : elenco.length ? elenco.join(" · ") : "nessuna"), /*#__PURE__*/React.createElement(Field, {
+    label: "Password amministratore"
+  }, /*#__PURE__*/React.createElement("input", {
+    style: inp,
+    type: "password",
+    value: master,
+    onChange: e => setMaster(e.target.value)
+  })), /*#__PURE__*/React.createElement(Field, {
+    label: "Annata da aggiungere"
+  }, /*#__PURE__*/React.createElement("input", {
+    style: inp,
+    value: id,
+    onChange: e => setId(e.target.value),
+    placeholder: "es. 2013"
+  })), /*#__PURE__*/React.createElement(Field, {
+    label: "Password del dirigente"
+  }, /*#__PURE__*/React.createElement("input", {
+    style: inp,
+    value: chiave,
+    onChange: e => setChiave(e.target.value),
+    placeholder: "quella che gli manderai"
+  })), /*#__PURE__*/React.createElement(Field, {
+    label: "Codice aiutante (facoltativo)"
+  }, /*#__PURE__*/React.createElement("input", {
+    style: inp,
+    value: gara,
+    onChange: e => setGara(e.target.value),
+    placeholder: "lascia vuoto se non serve"
+  })), /*#__PURE__*/React.createElement(Btn, {
+    tone: "solid",
+    disabled: attesa,
+    onClick: aggiungi,
+    style: {
+      width: "100%",
+      padding: "14px 0"
+    }
+  }, "Crea o aggiorna l'annata"), msg && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.gr,
+      fontSize: 13,
+      marginTop: 12,
+      wordBreak: "break-all"
+    }
+  }, msg));
 }
 function Benvenuto() {
   const [cat, setCat] = useState("");
@@ -3474,8 +3670,8 @@ function App() {
     const t = setInterval(() => carica(true), 10000);
     return () => clearInterval(t);
   }, [admin, operatore]);
-  if (!cloud && !SETUP) return /*#__PURE__*/React.createElement(Benvenuto, null);
   if (cloud && !SQ) return /*#__PURE__*/React.createElement(ScegliSquadra, null);
+  if (!cloud && !SETUP) return /*#__PURE__*/React.createElement(Benvenuto, null);
   if (cloud && MODO_AIUTANTE && !operatore && db) return /*#__PURE__*/React.createElement(SbloccaAiutante, {
     verifica: verificaCodice
   });
