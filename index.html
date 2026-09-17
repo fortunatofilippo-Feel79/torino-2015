@@ -1471,6 +1471,12 @@ function LiveMatch({
   }
   function setPeriod(n) {
     if (n === period) return;
+    update({
+      ...match,
+      cur: n
+    }); // sola navigazione: non tocca cronometri ne presenze
+  }
+  function fineTempo() {
     const t = secNow(match, period);
     const stints = (match.stints || []).map(x => x.p === period && x.to == null ? {
       ...x,
@@ -1489,7 +1495,7 @@ function LiveMatch({
     };
     update({
       ...match,
-      cur: n,
+      cur: Math.min(period + 1, match.periods),
       stints,
       clocks
     });
@@ -1619,6 +1625,11 @@ function LiveMatch({
     setPicker(false);
   }
   const inCampoOra = squad.filter(p => inCampo(match, p.id, period));
+  const altroInMarcia = (() => {
+    const c = match.clocks || {};
+    for (const k of Object.keys(c)) if (c[k] && c[k].st && Number(k) !== period) return k;
+    return null;
+  })();
   const hard = [],
     soft = [];
   if (period >= 2 && match.periods >= 3) for (const p of squad) if (!(match.lineup[p.id] || []).includes(1) && !(match.lineup[p.id] || []).includes(2)) hard.push(p.name + ": nessuno dei primi due tempi");
@@ -1721,7 +1732,32 @@ function LiveMatch({
       padding: "14px 0",
       fontSize: 16
     }
-  }, corre ? "Pausa" : sec > 0 ? "Riprendi" : "Avvia"))), !readOnly && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }, corre ? "Pausa" : sec > 0 ? "Riprendi" : "Avvia"))), !readOnly && (sec > 0 || squad.some(p => inCampo(match, p.id, period))) && /*#__PURE__*/React.createElement("div", {
+    className: "px4 mt3"
+  }, /*#__PURE__*/React.createElement(Btn, {
+    onClick: fineTempo,
+    style: {
+      width: "100%",
+      padding: "14px 0"
+    }
+  }, period < match.periods ? "Fine " + period + "º tempo" : "Fine ultimo tempo"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 12,
+      marginTop: 6
+    }
+  }, "Ferma il cronometro, chiude i minuti di chi è in campo e passa al tempo successivo.")), !readOnly && altroInMarcia && /*#__PURE__*/React.createElement("div", {
+    className: "px4 mt3"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.gr,
+      color: "#fff",
+      borderRadius: 12,
+      padding: 12,
+      fontSize: 13,
+      fontWeight: 700
+    }
+  }, "Attenzione: il cronometro del ", altroInMarcia, "º tempo è ancora in marcia.")), !readOnly && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     className: "grid g2 gap3 px4 pt5"
   }, /*#__PURE__*/React.createElement(Btn, {
     tone: "solid",
@@ -1777,7 +1813,7 @@ function LiveMatch({
       fontSize: 14,
       fontWeight: 700
     }
-  }, "Cronometro in marcia ma nessuno in campo: tocca i nomi di chi sta giocando.")), /*#__PURE__*/React.createElement("div", {
+  }, "Cronometro in marcia ma nessuno in campo: tocca i nomi di chi sta giocando.")), !readOnly && /*#__PURE__*/React.createElement("div", {
     className: "px4 pt5"
   }, /*#__PURE__*/React.createElement("div", {
     className: "flex ic jb",
@@ -1921,7 +1957,7 @@ function LiveMatch({
         cursor: "pointer"
       }
     }, "annulla"));
-  })), (match.subs || []).length > 0 && /*#__PURE__*/React.createElement("div", {
+  })), !readOnly && (match.subs || []).length > 0 && /*#__PURE__*/React.createElement("div", {
     className: "px4 pt5"
   }, /*#__PURE__*/React.createElement("div", {
     style: {
