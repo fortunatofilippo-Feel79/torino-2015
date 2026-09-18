@@ -654,6 +654,9 @@ function buildText(m, roster) {
 
 function computeStats(roster, matches) {
   const done = matches.filter(m => m.status === "done");
+  const gareTot = done.length;
+  const ultime = [...done].sort((a, b) => a.date < b.date ? 1 : -1).slice(0, 4);
+  const maxPeriodi = Math.max(2, ...done.map(m => m.periods || 3));
   const per = roster.map(p => {
     let tempi = 0,
       minuti = 0,
@@ -673,6 +676,17 @@ function computeStats(roster, matches) {
       minuti += minutiPartita(m, p.id);
       gol += m.goals.filter(g => g.playerId === p.id).length;
     }
+    const tempiIdx = [0, 0, 0, 0];
+    for (const m of done) for (const t of (m.lineup || {})[p.id] || []) if (t >= 1 && t <= 4) tempiIdx[t - 1]++;
+    let rMin = 0,
+      rDisp = 0,
+      rConv = 0;
+    for (const m of ultime) {
+      if (!m.squad.includes(p.id)) continue;
+      rConv++;
+      rDisp += m.periods * (m.durata || 15);
+      rMin += minutiPartita(m, p.id);
+    }
     return {
       ...p,
       presenze,
@@ -683,7 +697,11 @@ function computeStats(roster, matches) {
       dispTempi,
       dispMin,
       impiego: dispMin ? Math.round(minuti / dispMin * 100) : 0,
-      mediaMin: presenze ? minuti / presenze : 0
+      mediaMin: presenze ? minuti / presenze : 0,
+      tassoConv: gareTot ? Math.round(convocazioni / gareTot * 100) : 0,
+      tempiIdx,
+      convRecenti: rConv,
+      impiegoRecente: rDisp ? Math.round(rMin / rDisp * 100) : null
     };
   });
   const byType = {};
@@ -758,6 +776,9 @@ function computeStats(roster, matches) {
     v,
     n,
     s: s2,
+    gareTot,
+    maxPeriodi,
+    ultimeQuante: ultime.length,
     perTempo,
     cleanSheet,
     avversari: avversari.size,
@@ -2394,6 +2415,11 @@ function Stats({
   const ord = [...s.per].sort((a, b) => b.minuti - a.minuti || a.name.localeCompare(b.name));
   const maxT = Math.max(1, ...ord.map(p => p.minuti));
   const marcatori = [...s.per].filter(p => p.gol > 0).sort((a, b) => b.gol - a.gol);
+  const ordConv = [...s.per].sort((a, b) => {
+    const va = a.impiegoRecente != null ? a.impiegoRecente : a.impiego;
+    const vb = b.impiegoRecente != null ? b.impiegoRecente : b.impiego;
+    return va - vb || a.tassoConv - b.tassoConv || a.name.localeCompare(b.name);
+  });
   const maxTempo = Math.max(1, ...s.perTempo.map(r => Math.max(r.fatti, r.subiti)));
   useEffect(() => {
     if (readOnly) return;
@@ -2466,8 +2492,8 @@ function Stats({
     }
   }, [roster, matches, readOnly]);
   function esportaCSV() {
-    const rows = [["Giocatore", "Convocazioni", "Presenze", "Tempi giocati", "Minuti giocati", "Minuti disponibili", "Impiego %", "Gol", "Media minuti a partita"]];
-    for (const p of ord) rows.push([p.name, p.convocazioni, p.presenze, p.tempi, p.minuti, p.dispMin, p.impiego, p.gol, p.mediaMin.toFixed(1)]);
+    const rows = [["Giocatore", "Convocazioni", "Gare della squadra", "Tasso convocazione %", "Presenze", "Tempi giocati", "Minuti giocati", "Minuti disponibili", "Impiego %", "Impiego ultime gare %", "1º tempo", "2º tempo", "3º tempo", "4º tempo", "Gol", "Media minuti a partita"]];
+    for (const p of ord) rows.push([p.name, p.convocazioni, s.gareTot, p.tassoConv, p.presenze, p.tempi, p.minuti, p.dispMin, p.impiego, p.impiegoRecente == null ? "" : p.impiegoRecente, p.tempiIdx[0], p.tempiIdx[1], p.tempiIdx[2], p.tempiIdx[3], p.gol, p.mediaMin.toFixed(1)]);
     rows.push([]);
     rows.push(["Competizione", "Vinte", "Pari", "Perse", "Gol fatti", "Gol subiti"]);
     for (const t of TYPES) {
@@ -2836,6 +2862,82 @@ function Stats({
       marginTop: 8
     }
   }, "Impiego = minuti giocati sul totale dei minuti delle partite in cui era convocato."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 16,
+      fontWeight: 800,
+      margin: "24px 0 8px"
+    }
+  }, "Convocazioni, andamento e tempi"), /*#__PURE__*/React.createElement("div", {
+    className: "flex ic py2",
+    style: {
+      color: C.dim,
+      fontSize: 12,
+      borderBottom: "1px solid " + C.line
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "f1"
+  }, "Giocatore"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      width: 52,
+      textAlign: "right"
+    }
+  }, "Conv."), /*#__PURE__*/React.createElement("span", {
+    style: {
+      width: 62,
+      textAlign: "right"
+    }
+  }, "Ultime ", s.ultimeQuante), /*#__PURE__*/React.createElement("span", {
+    style: {
+      width: 76,
+      textAlign: "right"
+    }
+  }, "Tempi")), ordConv.map(p => {
+    const calo = p.impiegoRecente != null && (p.impiegoRecente === 0 || p.impiegoRecente <= p.impiego - 15);
+    const salita = p.impiegoRecente != null && p.impiegoRecente >= p.impiego + 15;
+    return /*#__PURE__*/React.createElement("div", {
+      key: p.id,
+      className: "flex ic py3",
+      style: {
+        borderBottom: "1px solid " + C.line,
+        fontSize: 15
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "f1",
+      style: {
+        fontWeight: 600
+      }
+    }, p.name), /*#__PURE__*/React.createElement("span", {
+      className: "num",
+      style: {
+        width: 52,
+        textAlign: "right",
+        color: p.tassoConv < 70 ? C.warn : C.dim
+      }
+    }, p.convocazioni, "/", s.gareTot), /*#__PURE__*/React.createElement("span", {
+      className: "num",
+      style: {
+        width: 62,
+        textAlign: "right",
+        color: calo ? C.gr : salita ? C.dim : C.dim,
+        fontWeight: calo ? 800 : 400
+      }
+    }, p.impiegoRecente == null ? "—" : p.impiegoRecente + "%", calo ? " ↓" : salita ? " ↑" : ""), /*#__PURE__*/React.createElement("span", {
+      className: "num",
+      style: {
+        width: 76,
+        textAlign: "right",
+        color: C.dim,
+        fontSize: 13
+      }
+    }, p.tempiIdx.slice(0, s.maxPeriodi).join("·")));
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 12,
+      marginTop: 8,
+      lineHeight: 1.5
+    }
+  }, /*#__PURE__*/React.createElement("b", null, "Conv."), " = in quante gare è stato convocato, in giallo sotto il 70%.", /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("b", null, "Ultime ", s.ultimeQuante), " = impiego nelle ultime gare, con la freccia se si discosta di oltre 15 punti dalla media di stagione.", /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("b", null, "Tempi"), " = quante volte ha giocato il 1º, il 2º, il 3º tempo."), /*#__PURE__*/React.createElement("div", {
     className: "noprint mt5"
   }, /*#__PURE__*/React.createElement("div", {
     style: {
