@@ -655,7 +655,8 @@ function buildText(m, roster) {
 function computeStats(roster, matches) {
   const done = matches.filter(m => m.status === "done");
   const gareTot = done.length;
-  const ultime = [...done].sort((a, b) => a.date < b.date ? 1 : -1).slice(0, 4);
+  const ordinate = [...done].sort((a, b) => a.date < b.date ? 1 : -1);
+  const ultime = ordinate.slice(0, 4);
   const maxPeriodi = Math.max(2, ...done.map(m => m.periods || 3));
   const minutiSquadra = done.reduce((t, m) => t + (m.periods || 3) * (m.durata || 15), 0);
   const per = roster.map(p => {
@@ -782,6 +783,7 @@ function computeStats(roster, matches) {
     maxPeriodi,
     minutiSquadra,
     ultimeQuante: ultime.length,
+    ultimaGara: ordinate[0] || null,
     perTempo,
     cleanSheet,
     avversari: avversari.size,
@@ -2414,16 +2416,74 @@ function Stats({
 }) {
   const s = useMemo(() => computeStats(roster, matches), [roster, matches]);
   const [img, setImg] = useState("");
+  const [vista, setVista] = useState("stagione");
   const cv = useRef(null);
   const ord = [...s.per].sort((a, b) => b.minuti - a.minuti || a.name.localeCompare(b.name));
-  const maxT = Math.max(1, ...ord.map(p => p.minuti));
   const marcatori = [...s.per].filter(p => p.gol > 0).sort((a, b) => b.gol - a.gol);
-  const ordConv = [...s.per].sort((a, b) => {
-    const va = a.impiegoRecente != null ? a.impiegoRecente : a.impiego;
-    const vb = b.impiegoRecente != null ? b.impiegoRecente : b.impiego;
-    return va - vb || a.tassoConv - b.tassoConv || a.name.localeCompare(b.name);
-  });
   const maxTempo = Math.max(1, ...s.perTempo.map(r => Math.max(r.fatti, r.subiti)));
+  const gara = s.ultimaGara;
+  const vistaGara = vista === "gara" && !!gara;
+
+  // una sola lista, usata sia a schermo sia nell'immagine
+  const righe = useMemo(() => {
+    if (vistaGara) {
+      const tot = (gara.periods || 3) * (gara.durata || 15);
+      return roster.map(p => {
+        const conv = (gara.squad || []).includes(p.id);
+        const min = conv ? Math.round(minutiPartita(gara, p.id)) : 0;
+        const tempi = ((gara.lineup || {})[p.id] || []).slice().sort((a, b) => a - b);
+        const gol = (gara.goals || []).filter(g => g.playerId === p.id).length;
+        return {
+          id: p.id,
+          name: p.name,
+          ordine: conv ? min : -1,
+          pct: tot ? Math.round(min / tot * 100) : 0,
+          allerta: !conv || min === 0,
+          parti: conv ? [{
+            t: min + "\u2032"
+          }, {
+            t: "tempi " + (tempi.length ? tempi.join("\u00b7") : "nessuno"),
+            c: tempi.length ? null : "warn"
+          }, {
+            t: gol + " gol",
+            c: gol > 0 ? "gr" : null
+          }] : [{
+            t: "non convocato",
+            c: "warn"
+          }]
+        };
+      }).sort((a, b) => b.ordine - a.ordine || a.name.localeCompare(b.name));
+    }
+    return ord.map(p => {
+      const calo = p.impiegoRecente != null && (p.impiegoRecente === 0 || p.impiegoRecente <= p.impiego - 15);
+      const salita = p.impiegoRecente != null && p.impiegoRecente >= p.impiego + 15;
+      return {
+        id: p.id,
+        name: p.name,
+        ordine: p.minuti,
+        pct: p.coinvolgimento,
+        allerta: p.coinvolgimento < 40,
+        parti: [{
+          t: p.minuti + "\u2032"
+        }, {
+          t: "convocato " + p.convocazioni + "/" + s.gareTot,
+          c: p.tassoConv < 70 ? "warn" : null
+        }, {
+          t: "impiego " + p.impiego + "%"
+        }, {
+          t: "ultime " + s.ultimeQuante + ": " + (p.impiegoRecente == null ? "\u2014" : p.impiegoRecente + "%") + (calo ? " \u2193" : salita ? " \u2191" : ""),
+          c: calo ? "gr" : null
+        }, {
+          t: "tempi " + p.tempiIdx.slice(0, s.maxPeriodi).join("\u00b7")
+        }, {
+          t: p.gol + " gol",
+          c: p.gol > 0 ? "gr" : null
+        }]
+      };
+    });
+  }, [vistaGara, gara, ord, s, roster]);
+  const sottotitolo = vistaGara ? (gara.opponent || "Avversario") + " \u00b7 " + fmtDate(gara.date) + " \u00b7 " + scoreOf(gara)[0] + "\u2013" + scoreOf(gara)[1] + " \u00b7 " + gara.periods + " tempi da " + (gara.durata || 15) + "\u2032" : "Dal pi\u00f9 coinvolto al meno. Su " + s.gareTot + " gare, " + s.minutiSquadra + " minuti giocabili ciascuno.";
+  const colore = c => c === "warn" ? C.warn : c === "gr" ? C.gr : C.dim;
   useEffect(() => {
     if (readOnly) return;
     const im = new Image();
@@ -2436,7 +2496,7 @@ function Stats({
       if (!c) return;
       const W = 1080,
         RH = 112,
-        Hh = 430 + ord.length * RH + 130;
+        Hh = 430 + righe.length * RH + 130;
       c.width = W;
       c.height = Hh;
       const x = c.getContext("2d");
@@ -2453,10 +2513,10 @@ function Stats({
       x.fillText(CLUB, 245, 118);
       x.fillStyle = C.dim;
       x.font = F(30, 500);
-      x.fillText(`Statistiche ${CAT} · ${s.total} partite`, 245, 170);
+      x.fillText(vistaGara ? `Ultima gara \u00b7 ${CAT}` : `Statistiche ${CAT} \u00b7 ${s.total} partite`, 245, 170);
       x.fillStyle = C.txt;
       x.font = F(34, 700);
-      x.fillText(`${s.v}V  ${s.n}N  ${s.s}P   ·   gol ${s.gf}:${s.gs}`, 245, 223);
+      x.fillText(vistaGara ? `${gara.opponent || "Avversario"}   ${scoreOf(gara)[0]}\u2013${scoreOf(gara)[1]}   ${fmtDate(gara.date)}` : `${s.v}V  ${s.n}N  ${s.s}P   \u00b7   gol ${s.gf}:${s.gs}`, 245, 223);
       let y = 290;
       x.strokeStyle = C.line;
       x.lineWidth = 2;
@@ -2467,23 +2527,31 @@ function Stats({
       y += 48;
       x.fillStyle = C.dim;
       x.font = F(27, 600);
-      x.fillText("Coinvolgimento: minuti giocati sul totale della squadra", 70, y);
+      x.fillText(vistaGara ? "Minuti giocati in questa partita" : "Coinvolgimento: minuti giocati sul totale della squadra", 70, y);
       y += 42;
-      ord.forEach(p => {
-        const calo = p.impiegoRecente != null && (p.impiegoRecente === 0 || p.impiegoRecente <= p.impiego - 15);
+      righe.forEach(r => {
         x.fillStyle = C.tint;
-        x.fillRect(70, y, p.coinvolgimento / 100 * 940, RH - 16);
+        x.fillRect(70, y, r.pct / 100 * 940, RH - 16);
         x.fillStyle = C.txt;
         x.font = F(34, 700);
-        x.fillText(p.name, 88, y + 42);
+        x.fillText(r.name, 88, y + 42);
         x.textAlign = "right";
-        x.fillStyle = p.coinvolgimento < 40 ? C.warn : C.gr;
+        x.fillStyle = r.allerta ? C.warn : C.gr;
         x.font = F(40, 800);
-        x.fillText(p.coinvolgimento + "%", 1010, y + 46);
+        x.fillText(r.pct + "%", 1010, y + 46);
         x.textAlign = "left";
-        x.fillStyle = C.dim;
         x.font = F(24, 500);
-        x.fillText(p.minuti + "\u2032  ·  convocato " + p.convocazioni + "/" + s.gareTot + "  ·  impiego " + p.impiego + "%" + "  ·  ultime " + s.ultimeQuante + ": " + (p.impiegoRecente == null ? "—" : p.impiegoRecente + "%") + (calo ? " \u2193" : "") + "  ·  tempi " + p.tempiIdx.slice(0, s.maxPeriodi).join("·") + "  ·  " + p.gol + " gol", 88, y + 80);
+        let cx = 88;
+        r.parti.forEach((seg, i) => {
+          if (i > 0) {
+            x.fillStyle = C.line;
+            x.fillText("  \u00b7  ", cx, y + 80);
+            cx += x.measureText("  \u00b7  ").width;
+          }
+          x.fillStyle = colore(seg.c);
+          x.fillText(seg.t, cx, y + 80);
+          cx += x.measureText(seg.t).width;
+        });
         y += RH;
       });
       y += 22;
@@ -2495,16 +2563,16 @@ function Stats({
       y += 40;
       x.fillStyle = C.dim;
       x.font = F(23, 500);
-      ["Coinvolgimento = minuti giocati sul totale dei minuti disputati dalla squadra.", "Impiego = minuti sulle sole gare in cui era convocato. La freccia segnala un calo recente.", "Questi numeri dicono quanto ha giocato, non quanto è bravo."].forEach((r, i) => {
+      (vistaGara ? ["La percentuale \u00e8 il tempo giocato sulla durata della partita.", "Chi non era convocato \u00e8 segnalato in elenco.", "Questi numeri dicono quanto ha giocato, non quanto \u00e8 bravo."] : ["Coinvolgimento = minuti giocati sul totale dei minuti disputati dalla squadra.", "Impiego = minuti sulle sole gare in cui era convocato. La freccia segnala un calo recente.", "Questi numeri dicono quanto ha giocato, non quanto \u00e8 bravo."]).forEach((r, i) => {
         x.fillText(r, 70, y + i * 32);
       });
       try {
         setImg(c.toDataURL("image/png"));
       } catch (e) {}
     }
-  }, [roster, matches, readOnly]);
+  }, [roster, matches, readOnly, righe, vistaGara]);
   function esportaCSV() {
-    const rows = [["Giocatore", "Coinvolgimento %", "Convocazioni", "Gare della squadra", "Tasso convocazione %", "Presenze", "Tempi giocati", "Minuti giocati", "Minuti disponibili", "Impiego %", "Impiego ultime gare %", "1º tempo", "2º tempo", "3º tempo", "4º tempo", "Gol", "Media minuti a partita"]];
+    const rows = [["Giocatore", "Coinvolgimento %", "Convocazioni", "Gare della squadra", "Tasso convocazione %", "Presenze", "Tempi giocati", "Minuti giocati", "Minuti disponibili", "Impiego %", "Impiego ultime gare %", "1\u00ba tempo", "2\u00ba tempo", "3\u00ba tempo", "4\u00ba tempo", "Gol", "Media minuti a partita"]];
     for (const p of ord) rows.push([p.name, p.coinvolgimento, p.convocazioni, s.gareTot, p.tassoConv, p.presenze, p.tempi, p.minuti, p.dispMin, p.impiego, p.impiegoRecente == null ? "" : p.impiegoRecente, p.tempiIdx[0], p.tempiIdx[1], p.tempiIdx[2], p.tempiIdx[3], p.gol, p.mediaMin.toFixed(1)]);
     rows.push([]);
     rows.push(["Competizione", "Vinte", "Pari", "Perse", "Gol fatti", "Gol subiti"]);
@@ -2541,12 +2609,12 @@ function Stats({
       fontWeight: 800,
       color: C.gr
     }
-  }, CLUB, " — Statistiche ", CAT), /*#__PURE__*/React.createElement("div", {
+  }, CLUB, " \u2014 Statistiche ", CAT), /*#__PURE__*/React.createElement("div", {
     style: {
       color: C.dim,
       fontSize: 13
     }
-  }, s.total, " partite · ", s.v, "V ", s.n, "N ", s.s, "P · gol ", s.gf, ":", s.gs)), s.total === 0 && /*#__PURE__*/React.createElement("div", {
+  }, s.total, " partite \xB7 ", s.v, "V ", s.n, "N ", s.s, "P \xB7 gol ", s.gf, ":", s.gs)), s.total === 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       color: C.dim,
       fontSize: 15
@@ -2599,7 +2667,7 @@ function Stats({
         fontSize: 15,
         color: C.dim
       }
-    }, b.v, "V ", b.n, "N ", b.p, "P · ", b.gf, ":", b.gs));
+    }, b.v, "V ", b.n, "N ", b.p, "P \xB7 ", b.gf, ":", b.gs));
   }), /*#__PURE__*/React.createElement("div", {
     className: "flex ic jb py3",
     style: {
@@ -2617,7 +2685,7 @@ function Stats({
       color: C.gr,
       fontWeight: 700
     }
-  }, s.v, "V ", s.n, "N ", s.s, "P · ", s.gf, ":", s.gs)), /*#__PURE__*/React.createElement("div", {
+  }, s.v, "V ", s.n, "N ", s.s, "P \xB7 ", s.gf, ":", s.gs)), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 16,
       fontWeight: 800,
@@ -2667,12 +2735,12 @@ function Stats({
     style: {
       fontWeight: 600
     }
-  }, r.p, "º tempo"), /*#__PURE__*/React.createElement("span", {
+  }, r.p, "\xBA tempo"), /*#__PURE__*/React.createElement("span", {
     className: "num",
     style: {
       color: C.dim
     }
-  }, r.fatti, " fatti · ", r.subiti, " subiti")), /*#__PURE__*/React.createElement("div", {
+  }, r.fatti, " fatti \xB7 ", r.subiti, " subiti")), /*#__PURE__*/React.createElement("div", {
     className: "flex ic gap2"
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -2757,7 +2825,7 @@ function Stats({
       fontSize: 12,
       marginBottom: 14
     }
-  }, "Da qui in giù i dati individuali. I genitori non li vedono."), s.valutabili > 0 && /*#__PURE__*/React.createElement("div", {
+  }, "Da qui in gi\xF9 i dati individuali. I genitori non li vedono."), s.valutabili > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       background: C.tint,
       borderRadius: 12,
@@ -2777,85 +2845,86 @@ function Stats({
       color: C.txt,
       marginTop: 2
     }
-  }, "gare in cui ", /*#__PURE__*/React.createElement("b", null, "tutti"), " i convocati hanno giocato almeno due tempi")), /*#__PURE__*/React.createElement("div", {
+  }, "gare in cui ", /*#__PURE__*/React.createElement("b", null, "tutti"), " i convocati hanno giocato almeno due tempi")), gara && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement(Seg, {
+    options: [{
+      v: "stagione",
+      l: "Stagione"
+    }, {
+      v: "gara",
+      l: "Ultima gara"
+    }],
+    value: vista,
+    onChange: setVista
+  })), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 16,
       fontWeight: 800,
       marginBottom: 4
     }
-  }, "Coinvolgimento dei ragazzi"), /*#__PURE__*/React.createElement("div", {
+  }, vistaGara ? "Chi ha giocato nell'ultima gara" : "Coinvolgimento dei ragazzi"), /*#__PURE__*/React.createElement("div", {
     style: {
       color: C.dim,
       fontSize: 12,
       marginBottom: 10
     }
-  }, "Dal più coinvolto al meno. Su ", s.gareTot, " gare, ", s.minutiSquadra, " minuti giocabili ciascuno."), ord.map(p => {
-    const calo = p.impiegoRecente != null && (p.impiegoRecente === 0 || p.impiegoRecente <= p.impiego - 15);
-    const salita = p.impiegoRecente != null && p.impiegoRecente >= p.impiego + 15;
-    return /*#__PURE__*/React.createElement("div", {
-      key: p.id,
-      style: {
-        borderBottom: "1px solid " + C.line,
-        position: "relative"
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        position: "absolute",
-        left: 0,
-        top: 0,
-        bottom: 0,
-        width: p.coinvolgimento + "%",
-        background: C.tint,
-        borderRadius: 4
-      }
-    }), /*#__PURE__*/React.createElement("div", {
-      style: {
-        position: "relative",
-        padding: "11px 4px"
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      className: "flex ic jb"
-    }, /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontSize: 15,
-        fontWeight: 700
-      }
-    }, p.name), /*#__PURE__*/React.createElement("span", {
-      className: "num",
-      style: {
-        fontSize: 17,
-        fontWeight: 800,
-        color: p.coinvolgimento < 40 ? C.warn : C.gr
-      }
-    }, p.coinvolgimento, "%")), /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: 12,
-        color: C.dim,
-        marginTop: 4,
-        lineHeight: 1.6
-      }
-    }, /*#__PURE__*/React.createElement("span", {
-      className: "num"
-    }, p.minuti, "′"), " · convocato ", /*#__PURE__*/React.createElement("span", {
-      className: "num",
-      style: {
-        color: p.tassoConv < 70 ? C.warn : C.dim,
-        fontWeight: p.tassoConv < 70 ? 700 : 400
-      }
-    }, p.convocazioni, "/", s.gareTot), " · impiego ", /*#__PURE__*/React.createElement("span", {
-      className: "num"
-    }, p.impiego, "%"), " · ultime " + s.ultimeQuante + ": ", /*#__PURE__*/React.createElement("span", {
-      className: "num",
-      style: {
-        color: calo ? C.gr : C.dim,
-        fontWeight: calo ? 800 : 400
-      }
-    }, p.impiegoRecente == null ? "—" : p.impiegoRecente + "%", calo ? " ↓" : salita ? " ↑" : ""), " · tempi ", /*#__PURE__*/React.createElement("span", {
-      className: "num"
-    }, p.tempiIdx.slice(0, s.maxPeriodi).join("·")), " · ", /*#__PURE__*/React.createElement("span", {
-      className: "num"
-    }, p.gol), " gol")));
+  }, sottotitolo), righe.map(r => /*#__PURE__*/React.createElement("div", {
+    key: r.id,
+    style: {
+      borderBottom: "1px solid " + C.line,
+      position: "relative"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      left: 0,
+      top: 0,
+      bottom: 0,
+      width: r.pct + "%",
+      background: C.tint,
+      borderRadius: 4
+    }
   }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "relative",
+      padding: "11px 4px"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex ic jb"
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 15,
+      fontWeight: 700
+    }
+  }, r.name), /*#__PURE__*/React.createElement("span", {
+    className: "num",
+    style: {
+      fontSize: 17,
+      fontWeight: 800,
+      color: r.allerta ? C.warn : C.gr
+    }
+  }, r.pct, "%")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      marginTop: 4,
+      lineHeight: 1.6
+    }
+  }, r.parti.map((seg, i) => /*#__PURE__*/React.createElement("span", {
+    key: i
+  }, i > 0 && /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: C.line
+    }
+  }, "  ·  "), /*#__PURE__*/React.createElement("span", {
+    className: "num",
+    style: {
+      color: colore(seg.c),
+      fontWeight: seg.c ? 700 : 400
+    }
+  }, seg.t))))))), /*#__PURE__*/React.createElement("div", {
     style: {
       background: C.sur,
       border: "1px solid " + C.line,
@@ -2871,11 +2940,15 @@ function Stats({
       marginBottom: 8,
       fontSize: 14
     }
-  }, "Come leggere questi numeri"), /*#__PURE__*/React.createElement("b", null, "La percentuale grande"), " è il coinvolgimento: i minuti giocati sul totale dei minuti disputati dalla squadra in stagione. Chi gioca tutto ogni volta arriva a 100. Tiene dentro sia le volte in cui è rimasto a casa sia quelle in cui è stato portato senza entrare. Sotto il 40% diventa giallo.", /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("b", null, "Minuti"), " — quanti ne ha giocati in totale.", /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("b", null, "Convocato"), " — in quante gare era in lista. Giallo sotto il 70%: è la decisione che viene prima di tutte, e nelle altre statistiche non si vedrebbe.", /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("b", null, "Impiego"), " — minuti giocati sul totale delle sole gare in cui era convocato. Confronta i ragazzi a parità di occasioni, quindi non penalizza chi era assente o infortunato.", /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("b", null, "Ultime ", s.ultimeQuante), " — l'impiego nelle gare più recenti. La freccia compare se si discosta di oltre quindici punti dalla media di stagione, o se è a zero: è la tendenza che il totale nasconde.", /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("b", null, "Tempi"), " — quante volte ha giocato il 1º, il 2º, il 3º. Chi ha il numero concentrato sull'ultimo entra quasi sempre a partita decisa, anche a parità di minuti.", /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("b", null, "Gol"), " — utili per festeggiare, non per valutare: un difensore avrà sempre zero.", /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("span", {
+  }, "Come leggere questi numeri"), vistaGara ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("b", null, "La percentuale grande"), " \xE8 il tempo giocato sulla durata della partita: chi ha giocato tutta la gara arriva a 100.", /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("b", null, "Minuti"), " \u2014 quanti ne ha giocati in questa gara.", /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("b", null, "Tempi"), " \u2014 in quali frazioni \xE8 sceso in campo.", /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("b", null, "Non convocato"), " \u2014 non era in lista gara, quindi la sua percentuale non \xE8 confrontabile con quella degli altri.", /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("span", {
     style: {
       color: C.dim
     }
-  }, "Nessuno di questi numeri misura quanto è bravo un ragazzo. Misurano quanto ha giocato, cioè decisioni prese da altri. Servono a vedere se la distribuzione è equilibrata e a notare chi sta scivolando fuori, prima che se ne accorgano i genitori.")), /*#__PURE__*/React.createElement("div", {
+  }, "Chi risulta convocato con zero minuti \xE8 stato portato al campo senza entrare: \xE8 la situazione che conviene notare subito.")) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("b", null, "La percentuale grande"), " \xE8 il coinvolgimento: i minuti giocati sul totale dei minuti disputati dalla squadra in stagione. Chi gioca tutto ogni volta arriva a 100. Tiene dentro sia le volte in cui \xE8 rimasto a casa sia quelle in cui \xE8 stato portato senza entrare. Sotto il 40% diventa giallo.", /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("b", null, "Minuti"), " \u2014 quanti ne ha giocati in totale.", /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("b", null, "Convocato"), " \u2014 in quante gare era in lista. Giallo sotto il 70%: \xE8 la decisione che viene prima di tutte, e nelle altre statistiche non si vedrebbe.", /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("b", null, "Impiego"), " \u2014 minuti giocati sul totale delle sole gare in cui era convocato. Confronta i ragazzi a parit\xE0 di occasioni, quindi non penalizza chi era assente o infortunato.", /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("b", null, "Ultime ", s.ultimeQuante), " \u2014 l'impiego nelle gare pi\xF9 recenti. La freccia compare se si discosta di oltre quindici punti dalla media di stagione, o se \xE8 a zero: \xE8 la tendenza che il totale nasconde.", /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("b", null, "Tempi"), " \u2014 quante volte ha giocato il 1\xBA, il 2\xBA, il 3\xBA. Chi ha il numero concentrato sull'ultimo entra quasi sempre a partita decisa, anche a parit\xE0 di minuti.", /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("b", null, "Gol"), " \u2014 utili per festeggiare, non per valutare: un difensore avr\xE0 sempre zero.", /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: C.dim
+    }
+  }, "Nessuno di questi numeri misura quanto \xE8 bravo un ragazzo. Misurano quanto ha giocato, cio\xE8 decisioni prese da altri. Servono a vedere se la distribuzione \xE8 equilibrata e a notare chi sta scivolando fuori, prima che se ne accorgano i genitori."))), /*#__PURE__*/React.createElement("div", {
     className: "noprint mt5"
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -2904,7 +2977,7 @@ function Stats({
       fontSize: 12,
       marginTop: 8
     }
-  }, "L'immagine contiene la tabella individuale: mandala solo a chi di dovere."), /*#__PURE__*/React.createElement("canvas", {
+  }, "L'immagine segue la vista scelta qui sopra e contiene i dati individuali: mandala solo a chi di dovere."), /*#__PURE__*/React.createElement("canvas", {
     ref: cv,
     style: {
       width: "100%",
@@ -2914,9 +2987,6 @@ function Stats({
     }
   }))))));
 }
-
-/* ---------------- squadra ---------------- */
-
 function Team({
   roster,
   setRoster,
@@ -4076,6 +4146,7 @@ try {
   }));
 } catch (e) {}
 ReactDOM.createRoot(document.getElementById("root")).render(/*#__PURE__*/React.createElement(App, null));</script>
+
 
 </body>
 </html>
