@@ -582,6 +582,14 @@ function localSave(db) {
     localStorage.setItem(LKEY, JSON.stringify(db));
   } catch (e) {}
 }
+async function condividiTesto(testo, titolo) {
+  try {
+    if (navigator.share) { await navigator.share({ text: testo, title: titolo }); return "condiviso"; }
+  } catch (e) { if (e && e.name === "AbortError") return "annullato"; }
+  try { navigator.clipboard.writeText(testo); return "copiato"; } catch (e) {}
+  return "errore";
+}
+
 async function condividiPNG(dataUrl, nome, titolo) {
   if (!dataUrl) return;
   try {
@@ -2306,7 +2314,8 @@ function History({
   reopen,
   remove,
   readOnly,
-  openConv
+  openConv,
+  openRel
 }) {
   const [filter, setFilter] = useState("tutte");
   const list = matches.filter(m => m.status === "done").filter(m => filter === "tutte" || m.type === filter).slice().sort((a, b) => a.date < b.date ? 1 : -1);
@@ -2403,7 +2412,16 @@ function History({
         padding: "9px 14px",
         fontSize: 13
       }
-    }, "Elimina")));
+    }, "Elimina")), !readOnly && /*#__PURE__*/React.createElement(Btn, {
+      tone: m.relazione ? "quiet" : "ghost",
+      onClick: () => openRel(m.id),
+      style: {
+        width: "100%",
+        marginTop: 8,
+        padding: "9px 0",
+        fontSize: 13
+      }
+    }, m.relazione ? "Relazione fine gara \u2713" : "Relazione fine gara"));
   })));
 }
 
@@ -3751,6 +3769,411 @@ function Benvenuto() {
   }, "I dati restano solo qui: nessun account, nessuna password. Aggiungi l'app alla schermata Home e ogni tanto salva un backup dalla scheda Squadra.")));
 }
 
+/* ---------------- relazione fine gara ---------------- */
+
+function Relazione({
+  match,
+  roster,
+  update,
+  onBack
+}) {
+  const r0 = match.relazione || {};
+  const cambiRegistrati = (match.subs || []).map(c => {
+    const n = id => (roster.find(p => p.id === id) || {}).name || "—";
+    return n(c.out) + " esce, entra " + n(c.in) + " (" + c.p + "\u00ba, " + mmss(c.sec) + ")";
+  }).join("\n");
+  const [r, setR] = useState({
+    spogliatoi: "",
+    campo: "",
+    defib: "SI",
+    andamento: "",
+    sostituzioni: cambiRegistrati,
+    infortuni: "",
+    panchina: "",
+    pubblico: "",
+    gestione: "",
+    correttezza: "",
+    note: "",
+    accoglienza: "",
+    altro: "",
+    ...r0
+  });
+  const [msg, setMsg] = useState("");
+  const [img, setImg] = useState("");
+  const cv = useRef(null);
+  const set = (k, v) => setR({
+    ...r,
+    [k]: v
+  });
+  const [us, them] = scoreOf(match);
+  const noi = CLUB + " " + CAT;
+  const salva = () => update({
+    ...match,
+    relazione: r
+  });
+  const intestazione = {
+    data: fmtDate(match.date),
+    campo: match.address || (match.home ? "campo interno" : "campo avversario"),
+    gara: match.home ? noi + " vs " + (match.opponent || "Avversario") : (match.opponent || "Avversario") + " vs " + noi,
+    tipo: typeLabel(match),
+    risultato: match.home ? us + "-" + them : them + "-" + us
+  };
+  const v = x => x && String(x).trim() ? String(x).trim() : "—";
+  const sezioni = [{
+    t: "1. IMPIANTO",
+    voci: [["Spogliatoi", r.spogliatoi], ["Campo (tipo/condizioni)", r.campo], ["Defibrillatore", r.defib]]
+  }, {
+    t: "2. GARA",
+    voci: [["Andamento", r.andamento], ["Sostituzioni", r.sostituzioni], ["Infortuni", r.infortuni]]
+  }, {
+    t: "3. DISCIPLINA",
+    voci: [["Panchina", r.panchina], ["Pubblico/Avversario", r.pubblico]]
+  }, {
+    t: "4. ARBITRO/AUTOARBITRAGGIO",
+    voci: [["Gestione", r.gestione], ["Correttezza", r.correttezza]]
+  }, {
+    t: "5. NOTE/INCIDENTI",
+    voci: [["Ritardi/danni/episodi", r.note]]
+  }, {
+    t: "6. ACCOGLIENZA/COMPORTAMENTO DIR AVVERSARI",
+    voci: [[null, r.accoglienza]]
+  }, {
+    t: "7. ALTRO",
+    voci: [[null, r.altro]]
+  }];
+  const testo = (() => {
+    const L = [];
+    L.push("*RELAZIONE FINE GARA - DIRIGENTE*");
+    L.push("");
+    L.push("\ud83d\udcc5 Data: " + intestazione.data);
+    L.push("\ud83c\udfdf\ufe0f Campo: " + intestazione.campo);
+    L.push("\u26bd Gara: " + intestazione.gara);
+    L.push("\ud83c\udfc6 Tipo: " + intestazione.tipo);
+    L.push("\ud83d\udd22 Risultato: " + intestazione.risultato);
+    for (const s of sezioni) {
+      L.push("");
+      L.push("*" + s.t + "*");
+      for (const par of s.voci) L.push(par[0] ? par[0] + ": " + v(par[1]) : v(par[1]));
+    }
+    return L.join("\n");
+  })();
+  useEffect(() => {
+    const im = new Image();
+    im.onload = () => render(im);
+    im.onerror = () => {};
+    im.src = LOGO;
+    render(null);
+    function render(logo) {
+      const c = cv.current;
+      if (!c) return;
+      const F = (sz, w = 400) => `${w} ${sz}px Helvetica,Arial,sans-serif`;
+      const W = 1080,
+        M = 70,
+        LARG = W - M * 2,
+        LH = 36;
+      let mis = null;
+      try {
+        mis = document.createElement("canvas").getContext("2d");
+      } catch (e) {}
+      if (!mis) return;
+      const spezza = (t, font) => {
+        mis.font = font;
+        const out = [];
+        for (const para of String(t).split("\n")) {
+          if (!para.trim()) {
+            out.push("");
+            continue;
+          }
+          let riga = "";
+          for (const parola of para.split(" ")) {
+            const prova = riga ? riga + " " + parola : parola;
+            if (mis.measureText(prova).width > LARG && riga) {
+              out.push(riga);
+              riga = parola;
+            } else riga = prova;
+          }
+          out.push(riga);
+        }
+        return out;
+      };
+      const el = [];
+      for (const s of sezioni) {
+        el.push({
+          t: s.t,
+          f: F(28, 800),
+          c: C.gr,
+          mt: 30
+        });
+        for (const par of s.voci) {
+          const testoVoce = par[0] ? par[0] + ": " + v(par[1]) : v(par[1]);
+          spezza(testoVoce, F(26, 500)).forEach((l, i) => el.push({
+            t: l,
+            f: F(26, 500),
+            c: C.txt,
+            mt: i === 0 ? 12 : 0
+          }));
+        }
+      }
+      const Hh = 300 + el.reduce((a, e) => a + e.mt + LH, 0) + 90;
+      c.width = W;
+      c.height = Hh;
+      const x = c.getContext("2d");
+      if (!x) return;
+      x.fillStyle = "#fff";
+      x.fillRect(0, 0, W, Hh);
+      x.fillStyle = C.gr;
+      x.fillRect(0, 0, W, 18);
+      x.fillRect(0, Hh - 18, W, 18);
+      if (logo) x.drawImage(logo, M, 52, 120, 130);
+      x.fillStyle = C.gr;
+      x.font = F(36, 800);
+      x.fillText("Relazione fine gara", 205, 96);
+      x.fillStyle = C.dim;
+      x.font = F(26, 500);
+      x.fillText(intestazione.gara + "  \u00b7  " + intestazione.tipo, 205, 136);
+      x.fillStyle = C.txt;
+      x.font = F(30, 700);
+      x.fillText(intestazione.data + "  \u00b7  " + intestazione.risultato, 205, 178);
+      let y = 250;
+      x.strokeStyle = C.line;
+      x.lineWidth = 2;
+      x.beginPath();
+      x.moveTo(M, y);
+      x.lineTo(W - M, y);
+      x.stroke();
+      y += 20;
+      for (const e of el) {
+        y += e.mt;
+        x.fillStyle = e.c;
+        x.font = e.f;
+        x.fillText(e.t, M, y + 24);
+        y += LH;
+      }
+      y += 30;
+      x.strokeStyle = C.line;
+      x.beginPath();
+      x.moveTo(M, y);
+      x.lineTo(W - M, y);
+      x.stroke();
+      x.fillStyle = C.dim;
+      x.font = F(22, 500);
+      x.fillText(intestazione.campo + "  \u00b7  " + CLUB + " " + CAT, M, y + 38);
+      try {
+        setImg(c.toDataURL("image/png"));
+      } catch (e) {}
+    }
+  }, [r, match]);
+  const area = (etichetta, k, segnaposto, alto) => /*#__PURE__*/React.createElement(Field, {
+    label: etichetta
+  }, /*#__PURE__*/React.createElement("textarea", {
+    style: {
+      ...inp,
+      minHeight: alto || 68,
+      resize: "vertical"
+    },
+    value: r[k],
+    onChange: e => set(k, e.target.value),
+    placeholder: segnaposto || ""
+  }));
+  return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Header, {
+    title: "Relazione fine gara",
+    sub: `${CLUB} · ${CAT}`,
+    onBack: () => {
+      salva();
+      onBack();
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    className: "px4 py5"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.tint,
+      borderRadius: 12,
+      padding: 14,
+      marginBottom: 18,
+      fontSize: 14,
+      lineHeight: 1.6
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 800,
+      marginBottom: 4
+    }
+  }, match.opponent || "Avversario", " \xB7 ", intestazione.data), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.txt
+    }
+  }, intestazione.gara, " \xB7 ", intestazione.tipo, " \xB7 ", /*#__PURE__*/React.createElement("b", null, intestazione.risultato)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 12,
+      marginTop: 4
+    }
+  }, intestazione.campo)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 16,
+      fontWeight: 800,
+      marginBottom: 8
+    }
+  }, "1. Impianto"), area("Spogliatoi", "spogliatoi", "stato, pulizia, spazio, chiavi…"), area("Campo (tipo/condizioni)", "campo", "sintetico o erba, manto, illuminazione, recinzioni…"), /*#__PURE__*/React.createElement(Field, {
+    label: "Defibrillatore presente"
+  }, /*#__PURE__*/React.createElement(Seg, {
+    options: [{
+      v: "SI",
+      l: "SI"
+    }, {
+      v: "NO",
+      l: "NO"
+    }],
+    value: r.defib,
+    onChange: x => set("defib", x)
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 16,
+      fontWeight: 800,
+      margin: "22px 0 4px"
+    }
+  }, "2. Gara"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 12,
+      marginBottom: 8
+    }
+  }, "Senza questioni tecniche: solo fatti."), area("Andamento", "andamento", "come si è svolta, clima generale…", 86), area("Sostituzioni", "sostituzioni", ""), cambiRegistrati && r.sostituzioni !== cambiRegistrati && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: -8,
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement(Btn, {
+    tone: "ghost",
+    style: {
+      width: "100%",
+      fontSize: 13,
+      padding: "8px 0"
+    },
+    onClick: () => set("sostituzioni", cambiRegistrati)
+  }, "Reinserisci i cambi registrati in app")), area("Infortuni", "infortuni", "chi, quando, come è stato gestito, se è uscito…"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 16,
+      fontWeight: 800,
+      margin: "22px 0 8px"
+    }
+  }, "3. Disciplina"), area("Panchina (comportamento, attenzione)", "panchina", "nostra panchina: contegno, richiami…"), area("Pubblico / Avversario", "pubblico", "comportamento del pubblico e dei tesserati avversari…"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 16,
+      fontWeight: 800,
+      margin: "22px 0 8px"
+    }
+  }, "4. Arbitro o autoarbitraggio"), area("Gestione", "gestione", "conduzione della gara, autorevolezza…"), area("Correttezza", "correttezza", "imparzialità, episodi dubbi…"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 16,
+      fontWeight: 800,
+      margin: "22px 0 8px"
+    }
+  }, "5. Note e incidenti"), area("Ritardi, danni, episodi", "note", "ritardi di inizio, danni a strutture, episodi da segnalare…", 86), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 16,
+      fontWeight: 800,
+      margin: "22px 0 8px"
+    }
+  }, "6. Accoglienza e dirigenti avversari"), area("Come siamo stati accolti", "accoglienza", "accoglienza ricevuta, comportamento dei dirigenti avversari…", 86), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 16,
+      fontWeight: 800,
+      margin: "22px 0 8px"
+    }
+  }, "7. Altro"), area("Altro", "altro", "qualunque cosa valga la pena mettere agli atti…", 86), /*#__PURE__*/React.createElement("div", {
+    className: "mt5"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 16,
+      fontWeight: 800,
+      marginBottom: 8
+    }
+  }, "Invia la relazione"), /*#__PURE__*/React.createElement("div", {
+    className: "grid g2 gap2"
+  }, /*#__PURE__*/React.createElement(Btn, {
+    tone: "solid",
+    onClick: async () => {
+      salva();
+      const esito = await condividiTesto(testo, "Relazione fine gara");
+      setMsg(esito === "copiato" ? "Testo copiato: incollalo su WhatsApp." : esito === "condiviso" ? "Inviata." : esito === "annullato" ? "" : "Non riesco a condividere: usa Copia solo il testo.");
+    }
+  }, "Invia testo"), /*#__PURE__*/React.createElement(Btn, {
+    disabled: !img,
+    onClick: () => {
+      salva();
+      condividiPNG(img, `relazione-${match.date}.png`, "Relazione fine gara");
+    }
+  }, img ? "Invia immagine" : "Preparo l'immagine…")), /*#__PURE__*/React.createElement("div", {
+    className: "mt2"
+  }, /*#__PURE__*/React.createElement(Btn, {
+    tone: "ghost",
+    style: {
+      width: "100%"
+    },
+    onClick: () => {
+      salva();
+      try {
+        navigator.clipboard.writeText(testo);
+        setMsg("Testo copiato negli appunti.");
+      } catch (e) {}
+    }
+  }, "Copia solo il testo")), msg && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.gr,
+      fontSize: 13,
+      marginTop: 10
+    }
+  }, msg), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14,
+      fontWeight: 700,
+      margin: "20px 0 8px"
+    }
+  }, "Anteprima del testo"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.sur,
+      border: "1px solid " + C.line,
+      borderRadius: 12,
+      padding: 14,
+      whiteSpace: "pre-wrap",
+      fontSize: 13,
+      lineHeight: 1.55
+    }
+  }, testo), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14,
+      fontWeight: 700,
+      margin: "20px 0 8px"
+    }
+  }, "Anteprima dell'immagine"), /*#__PURE__*/React.createElement("canvas", {
+    ref: cv,
+    style: {
+      width: "100%",
+      borderRadius: 12,
+      border: "1px solid " + C.line
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    className: "mt4"
+  }, /*#__PURE__*/React.createElement(Btn, {
+    tone: "solid",
+    onClick: () => {
+      salva();
+      onBack();
+    },
+    style: {
+      width: "100%",
+      padding: "14px 0"
+    }
+  }, "Salva e chiudi")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 12,
+      marginTop: 8
+    }
+  }, "La relazione resta salvata dentro la partita: puoi riaprirla dallo Storico e completarla dopo."))));
+}
+
 /* ---------------- app ---------------- */
 
 function App() {
@@ -3916,7 +4339,12 @@ function App() {
     label: "Squadra"
   }];
   let body = null;
-  if (screen && screen.name === "form" && admin) body = /*#__PURE__*/React.createElement(ConvForm, {
+  if (screen && screen.name === "relazione" && find(screen.id) && admin) body = /*#__PURE__*/React.createElement(Relazione, {
+    match: find(screen.id),
+    roster: db.roster,
+    update: upsert,
+    onBack: () => { setScreen(null); setTab("storico"); }
+  });else if (screen && screen.name === "form" && admin) body = /*#__PURE__*/React.createElement(ConvForm, {
     roster: db.roster,
     ultima: ultima,
     initial: screen.id ? find(screen.id) : null,
@@ -4030,6 +4458,10 @@ function App() {
     remove: drop,
     openConv: id => setScreen({
       name: "conv",
+      id
+    }),
+    openRel: id => setScreen({
+      name: "relazione",
       id
     })
   });else if (tab === "stats") body = /*#__PURE__*/React.createElement(Stats, {
