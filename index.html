@@ -360,7 +360,8 @@ var d=null!=c&&c.hydratedSources||null,e=!1,f="",g=bj;null!==c&&void 0!==c&&(!0=
 function(a,b,c){if(!Vd(b))throw Error(n(200));return Wd(null,a,b,!1,c)};Q.unmountComponentAtNode=function(a){if(!Vd(a))throw Error(n(40));return a._reactRootContainer?(zb(function(){Wd(null,null,a,!1,function(){a._reactRootContainer=null;a[Ja]=null})}),!0):!1};Q.unstable_batchedUpdates=Tf;Q.unstable_renderSubtreeIntoContainer=function(a,b,c,d){if(!Vd(c))throw Error(n(200));if(null==a||void 0===a._reactInternals)throw Error(n(38));return Wd(a,b,c,!1,d)};Q.version="18.2.0-next-9e3b772b8-20220608"});
 })();
 </script>
-<script>const {
+<script>
+const {
   useState,
   useEffect,
   useMemo,
@@ -2229,6 +2230,7 @@ function LiveMatch({
   }, "Fatto"))));
 }
 function Gare({
+  roster,
   matches,
   open,
   create,
@@ -2249,7 +2251,10 @@ function Gare({
       padding: "16px 0",
       marginBottom: 18
     }
-  }, "Nuova convocazione"), readOnly && live && /*#__PURE__*/React.createElement("div", {
+  }, "Nuova convocazione"), !readOnly && /*#__PURE__*/React.createElement(Compleanni, {
+    roster: roster || [],
+    giorni: 7
+  }), readOnly && live && /*#__PURE__*/React.createElement("div", {
     style: {
       background: C.tint,
       border: "1px solid " + C.gr,
@@ -3005,6 +3010,190 @@ function Stats({
     }
   }))))));
 }
+/* ---------------- compleanni ---------------- */
+
+const BD_MAX_GIORNI = 30;
+const bdParse = bd => {
+  const m = /^(\d{2})-(\d{2})$/.exec(bd || "");
+  return m ? {
+    m: +m[1],
+    d: +m[2]
+  } : null;
+};
+const bdBisestile = y => y % 4 === 0 && y % 100 !== 0 || y % 400 === 0;
+// prossima ricorrenza (data locale a mezzanotte) e giorni che mancano
+const bdProssimo = (bd, oggi) => {
+  const p = bdParse(bd);
+  if (!p) return null;
+  const t0 = new Date(oggi.getFullYear(), oggi.getMonth(), oggi.getDate());
+  const nel = y => new Date(y, p.m - 1, p.m === 2 && p.d === 29 && !bdBisestile(y) ? 28 : p.d);
+  let dt = nel(t0.getFullYear());
+  if (dt < t0) dt = nel(t0.getFullYear() + 1);
+  return {
+    date: dt,
+    giorni: Math.round((dt - t0) / 86400000),
+    anno: dt.getFullYear()
+  };
+};
+const bdEta = anno => SQ && /^\d{4}$/.test(SQ.id) ? anno - Number(SQ.id) : null;
+const bdQuando = pr => pr.giorni === 0 ? "Oggi" : pr.giorni === 1 ? "Domani" : cap(GIORNI[pr.date.getDay()]) + " " + pr.date.getDate() + " " + MESI[pr.date.getMonth()];
+const bdNome = p => (p.name || "").trim().split(/\s+/)[0];
+const bdTesto = (p, pr) => {
+  const eta = bdEta(pr.anno);
+  const quando = bdQuando(pr);
+  const chi = eta ? `compie ${eta} anni` : "compie gli anni";
+  const frase = pr.giorni === 0 ? `🎂 Oggi ${chi} ${bdNome(p)}!` : `🎂 ${quando} ${chi} ${bdNome(p)}!`;
+  return `${frase}\nTanti auguri da tutto il ${CLUB} 💪⚽`;
+};
+const bdElenco = (roster, giorni, oggi) => roster.map(p => ({
+  p,
+  pr: bdProssimo(p.bd, oggi)
+})).filter(x => x.pr && x.pr.giorni <= giorni).sort((a, b) => a.pr.giorni - b.pr.giorni);
+function Compleanni({
+  roster,
+  giorni,
+  vuoto,
+  oggi
+}) {
+  const [sel, setSel] = useState(null);
+  const [testo, setTesto] = useState("");
+  const [copied, setCopied] = useState(false);
+  const lista = bdElenco(roster, giorni, oggi || new Date());
+  if (!lista.length && !vuoto) return null;
+  const apri = x => {
+    setTesto(bdTesto(x.p, x.pr));
+    setCopied(false);
+    setSel(x);
+  };
+  const copia = () => {
+    try {
+      navigator.clipboard.writeText(testo);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (e) {}
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.tint,
+      border: "1px solid " + C.gr,
+      borderRadius: 12,
+      padding: 12,
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14,
+      fontWeight: 800,
+      marginBottom: lista.length ? 8 : 0
+    }
+  }, "\uD83C\uDF82 Compleanni", vuoto ? " nei prossimi " + giorni + " giorni" : ""), !lista.length && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 14,
+      marginTop: 4
+    }
+  }, roster.some(p => p.bd) ? "Nessun compleanno in vista." : "Imposta giorno e mese di ogni ragazzo nell'elenco qui sotto."), lista.map(x => /*#__PURE__*/React.createElement("div", {
+    key: x.p.id,
+    className: "flex ic gap2",
+    style: {
+      padding: "6px 0",
+      fontSize: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "f1"
+  }, /*#__PURE__*/React.createElement("b", null, bdNome(x.p)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 13
+    }
+  }, bdQuando(x.pr), bdEta(x.pr.anno) ? " · " + bdEta(x.pr.anno) + " anni" : "", x.pr.giorni > 1 ? " · fra " + x.pr.giorni + " giorni" : "")), /*#__PURE__*/React.createElement(Btn, {
+    onClick: () => apri(x),
+    style: {
+      padding: "8px 12px",
+      fontSize: 14
+    }
+  }, "Auguri"))), sel && /*#__PURE__*/React.createElement(Sheet, {
+    onClose: () => setSel(null),
+    title: "Auguri a " + bdNome(sel.p)
+  }, /*#__PURE__*/React.createElement("textarea", {
+    value: testo,
+    onChange: e => setTesto(e.target.value),
+    rows: 4,
+    style: {
+      ...inp,
+      resize: "vertical",
+      lineHeight: 1.5,
+      fontFamily: "inherit"
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 12,
+      margin: "6px 0 12px"
+    }
+  }, "Puoi correggere il testo prima di copiarlo."), /*#__PURE__*/React.createElement("div", {
+    className: "grid g2 gap2"
+  }, /*#__PURE__*/React.createElement(Btn, {
+    tone: "solid",
+    onClick: copia
+  }, copied ? "Copiato" : "Copia testo"), /*#__PURE__*/React.createElement(Btn, {
+    onClick: () => setSel(null)
+  }, "Chiudi"))));
+}
+
+// data di nascita (solo giorno e mese) accanto al nome, nella scheda Squadra
+function CompleannoCampo({
+  p,
+  setBd
+}) {
+  const b0 = bdParse(p.bd);
+  const [d, setD] = useState(b0 ? String(b0.d) : "");
+  const [m, setM] = useState(b0 ? String(b0.m) : "");
+  const upd = (nd, nm) => {
+    setD(nd);
+    setM(nm);
+    setBd(nd && nm ? String(nm).padStart(2, "0") + "-" + String(nd).padStart(2, "0") : null);
+  };
+  const sty = {
+    ...inp,
+    width: "auto",
+    padding: "6px 8px",
+    fontSize: 14
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    className: "flex ic gap2",
+    style: {
+      marginTop: 6
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 13,
+      color: C.dim
+    }
+  }, "\uD83C\uDF82"), /*#__PURE__*/React.createElement("select", {
+    value: d,
+    onChange: e => upd(e.target.value, m),
+    style: sty,
+    "aria-label": "Giorno"
+  }, /*#__PURE__*/React.createElement("option", {
+    value: ""
+  }, "gg"), Array.from({
+    length: 31
+  }, (_, i) => i + 1).map(n => /*#__PURE__*/React.createElement("option", {
+    key: n,
+    value: n
+  }, n))), /*#__PURE__*/React.createElement("select", {
+    value: m,
+    onChange: e => upd(d, e.target.value),
+    style: sty,
+    "aria-label": "Mese"
+  }, /*#__PURE__*/React.createElement("option", {
+    value: ""
+  }, "mese"), MESI.map((n, i) => /*#__PURE__*/React.createElement("option", {
+    key: n,
+    value: i + 1
+  }, n))));
+}
 function Team({
   roster,
   setRoster,
@@ -3089,7 +3278,11 @@ function Team({
       fontSize: 14,
       marginBottom: 20
     }
-  }, "Sola lettura. Se sei il dirigente, inserisci la chiave di scrittura qui sotto per sbloccare le modifiche."), admin && /*#__PURE__*/React.createElement("div", {
+  }, "Sola lettura. Se sei il dirigente, inserisci la chiave di scrittura qui sotto per sbloccare le modifiche."), admin && /*#__PURE__*/React.createElement(Compleanni, {
+    roster: roster,
+    giorni: BD_MAX_GIORNI,
+    vuoto: true
+  }), admin && /*#__PURE__*/React.createElement("div", {
     className: "flex gap2 mb5"
   }, /*#__PURE__*/React.createElement("input", {
     style: {
@@ -3115,12 +3308,19 @@ function Team({
       borderBottom: "1px solid " + C.line,
       fontSize: 15
     }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "f1"
   }, /*#__PURE__*/React.createElement("span", {
-    className: "f1",
     style: {
       fontWeight: 600
     }
-  }, p.name), admin && /*#__PURE__*/React.createElement("button", {
+  }, p.name), admin && /*#__PURE__*/React.createElement(CompleannoCampo, {
+    p: p,
+    setBd: v => setRoster(roster.map(z => z.id === p.id ? {
+      ...z,
+      bd: v || undefined
+    } : z))
+  })), admin && /*#__PURE__*/React.createElement("button", {
     onClick: () => setRoster(roster.filter(z => z.id !== p.id)),
     style: {
       background: "none",
@@ -4430,6 +4630,7 @@ function App() {
       setTab("storico");
     }
   });else if (tab === "gare") body = /*#__PURE__*/React.createElement(Gare, {
+    roster: db.roster,
     matches: db.matches,
     readOnly: readOnly,
     live: !!live,
@@ -4577,7 +4778,8 @@ try {
     type: "application/json"
   }));
 } catch (e) {}
-ReactDOM.createRoot(document.getElementById("root")).render(/*#__PURE__*/React.createElement(App, null));</script>
+ReactDOM.createRoot(document.getElementById("root")).render(/*#__PURE__*/React.createElement(App, null));
+</script>
 
 
 </body>
