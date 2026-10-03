@@ -522,6 +522,18 @@ const outcome = m => {
   const [u, t] = scoreOf(m);
   return u > t ? "V" : u < t ? "P" : "N";
 };
+const parzialiTesto = m => {
+  const n = m.periods || 1;
+  if (n < 2 || !(m.goals || []).length) return null;
+  const max = Math.max(n, ...m.goals.map(g => g.period || 1));
+  const out = [];
+  for (let p = 1; p <= max; p++) {
+    const gp = m.goals.filter(g => (g.period || 1) === p);
+    if (p > n && !gp.length) continue;
+    out.push(p + "\u00ba " + gp.filter(g => g.team === "us").length + "\u2013" + gp.filter(g => g.team !== "us").length);
+  }
+  return out.join(" \u00b7 ");
+};
 
 /* ---------------- storage ---------------- */
 
@@ -2356,6 +2368,7 @@ function History({
     const o = outcome(m);
     const col = o === "V" ? C.gr : o === "P" ? C.dim : C.warn;
     const sc = m.goals.filter(g => g.team === "us" && g.playerId).map(g => (roster.find(p => p.id === g.playerId) || {}).name).filter(Boolean);
+    const parz = parzialiTesto(m);
     return /*#__PURE__*/React.createElement("div", {
       key: m.id,
       style: {
@@ -2386,7 +2399,15 @@ function History({
         fontWeight: 800,
         color: col
       }
-    }, u, "–", t)), sc.length > 0 && /*#__PURE__*/React.createElement("div", {
+    }, u, "–", t)), parz && /*#__PURE__*/React.createElement("div", {
+      className: "num",
+      style: {
+        color: col,
+        fontSize: 13,
+        fontWeight: 600,
+        marginTop: 8
+      }
+    }, parz), sc.length > 0 && /*#__PURE__*/React.createElement("div", {
       style: {
         color: C.dim,
         fontSize: 13,
