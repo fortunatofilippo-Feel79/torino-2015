@@ -3996,17 +3996,23 @@ function Relazione({
   match,
   roster,
   update,
-  onBack
+  onBack,
+  dirigente
 }) {
   const r0 = match.relazione || {};
+  const oggi = (() => {
+    const d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  })();
   const cambiRegistrati = (match.subs || []).map(c => {
-    const n = id => (roster.find(p => p.id === id) || {}).name || "—";
+    const n = id => (roster.find(p => p.id === id) || {}).name || "\u2014";
     return n(c.out) + " esce, entra " + n(c.in) + " (" + c.p + "\u00ba, " + mmss(c.sec) + ")";
   }).join("\n");
   const [r, setR] = useState({
     spogliatoi: "",
     campo: "",
     defib: "SI",
+    defibNota: "",
     andamento: "",
     sostituzioni: cambiRegistrati,
     infortuni: "",
@@ -4017,7 +4023,13 @@ function Relazione({
     note: "",
     accoglienza: "",
     altro: "",
-    ...r0
+    regolare: "SI",
+    segnalazioni: "NO",
+    segnalazioniNota: "",
+    dataRel: oggi,
+    ...r0,
+    segnalati: Array.isArray(r0.segnalati) ? r0.segnalati : [],
+    dirigente: r0.dirigente && String(r0.dirigente).trim() ? r0.dirigente : dirigente || ""
   });
   const [msg, setMsg] = useState("");
   const [img, setImg] = useState("");
@@ -4039,28 +4051,38 @@ function Relazione({
     tipo: typeLabel(match),
     risultato: match.home ? us + "-" + them : them + "-" + us
   };
-  const v = x => x && String(x).trim() ? String(x).trim() : "—";
+  const v = x => x && String(x).trim() ? String(x).trim() : "\u2014";
+  const riga = (lab, val) => !lab ? v(val) : /\?$/.test(lab) ? lab + " " + v(val) : lab + ": " + v(val);
+  const segnalati = r.segnalati || [];
+  const righeSegnalati = segnalati.filter(g => [g.squadra, g.numero, g.nome].some(x => x && String(x).trim())).map(g => [(g.squadra || "").trim(), g.numero && String(g.numero).trim() ? "n. " + String(g.numero).trim() : "", (g.nome || "").trim()].filter(Boolean).join(" \u00b7 "));
+  const defibTesto = r.defib + ((r.defibNota || "").trim() ? " \u2014 " + r.defibNota.trim() : "");
   const sezioni = [{
     t: "1. IMPIANTO",
-    voci: [["Spogliatoi", r.spogliatoi], ["Campo (tipo/condizioni)", r.campo], ["Defibrillatore", r.defib]]
+    voci: [["Spogliatoi", r.spogliatoi], ["Campo (tipo/condizioni)", r.campo], ["Defibrillatore", defibTesto]]
   }, {
     t: "2. GARA",
-    voci: [["Andamento", r.andamento], ["Sostituzioni", r.sostituzioni], ["Infortuni", r.infortuni]]
+    voci: [["Andamento della gara", r.andamento], ["Sostituzioni effettuate", r.sostituzioni], ["Infortuni", r.infortuni]]
   }, {
     t: "3. DISCIPLINA",
-    voci: [["Panchina", r.panchina], ["Pubblico/Avversario", r.pubblico]]
+    voci: [["Panchina (comportamento e attenzione)", r.panchina], ["Pubblico / Avversario", r.pubblico]]
   }, {
-    t: "4. ARBITRO/AUTOARBITRAGGIO",
-    voci: [["Gestione", r.gestione], ["Correttezza", r.correttezza]]
+    t: "4. ARBITRO / AUTOARBITRAGGIO",
+    voci: [["Gestione della gara", r.gestione], ["Correttezza", r.correttezza]]
   }, {
-    t: "5. NOTE/INCIDENTI",
-    voci: [["Ritardi/danni/episodi", r.note]]
+    t: "5. NOTE / INCIDENTI",
+    voci: [["Ritardi, danni, episodi particolari", r.note]]
   }, {
-    t: "6. ACCOGLIENZA/COMPORTAMENTO DIR AVVERSARI",
+    t: "6. ACCOGLIENZA / COMPORTAMENTO DIRIGENTI AVVERSARI",
     voci: [[null, r.accoglienza]]
   }, {
     t: "7. ALTRO",
     voci: [[null, r.altro]]
+  }, {
+    t: "8. GIOCATORI DA SEGNALARE",
+    voci: righeSegnalati.length ? righeSegnalati.map(x => [null, x]) : [[null, ""]]
+  }, {
+    t: "RIEPILOGO FINALE",
+    voci: [["La gara si \u00e8 svolta regolarmente?", r.regolare], ["Sono necessarie segnalazioni alla Societ\u00e0?", r.segnalazioni], ...(r.segnalazioni === "SI" ? [[null, r.segnalazioniNota]] : []), ["Dirigente Accompagnatore", r.dirigente], ["Data", fmtDate(r.dataRel)]]
   }];
   const testo = (() => {
     const L = [];
@@ -4069,12 +4091,12 @@ function Relazione({
     L.push("\ud83d\udcc5 Data: " + intestazione.data);
     L.push("\ud83c\udfdf\ufe0f Campo: " + intestazione.campo);
     L.push("\u26bd Gara: " + intestazione.gara);
-    L.push("\ud83c\udfc6 Tipo: " + intestazione.tipo);
+    L.push("\ud83c\udfc6 Tipo Gara: " + intestazione.tipo);
     L.push("\ud83d\udd22 Risultato: " + intestazione.risultato);
     for (const s of sezioni) {
       L.push("");
       L.push("*" + s.t + "*");
-      for (const par of s.voci) L.push(par[0] ? par[0] + ": " + v(par[1]) : v(par[1]));
+      for (const par of s.voci) L.push(riga(par[0], par[1]));
     }
     return L.join("\n");
   })();
@@ -4105,29 +4127,28 @@ function Relazione({
             out.push("");
             continue;
           }
-          let riga = "";
+          let rr = "";
           for (const parola of para.split(" ")) {
-            const prova = riga ? riga + " " + parola : parola;
-            if (mis.measureText(prova).width > LARG && riga) {
-              out.push(riga);
-              riga = parola;
-            } else riga = prova;
+            const prova = rr ? rr + " " + parola : parola;
+            if (mis.measureText(prova).width > LARG && rr) {
+              out.push(rr);
+              rr = parola;
+            } else rr = prova;
           }
-          out.push(riga);
+          out.push(rr);
         }
         return out;
       };
       const el = [];
       for (const s of sezioni) {
-        el.push({
-          t: s.t,
+        spezza(s.t, F(28, 800)).forEach((l, i) => el.push({
+          t: l,
           f: F(28, 800),
           c: C.gr,
-          mt: 30
-        });
+          mt: i === 0 ? 30 : 0
+        }));
         for (const par of s.voci) {
-          const testoVoce = par[0] ? par[0] + ": " + v(par[1]) : v(par[1]);
-          spezza(testoVoce, F(26, 500)).forEach((l, i) => el.push({
+          spezza(riga(par[0], par[1]), F(26, 500)).forEach((l, i) => el.push({
             t: l,
             f: F(26, 500),
             c: C.txt,
@@ -4184,6 +4205,13 @@ function Relazione({
       } catch (e) {}
     }
   }, [r, match]);
+  const titolo = (t, sotto) => /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 16,
+      fontWeight: 800,
+      margin: "22px 0 " + (sotto ? "4px" : "8px")
+    }
+  }, t);
   const area = (etichetta, k, segnaposto, alto) => /*#__PURE__*/React.createElement(Field, {
     label: etichetta
   }, /*#__PURE__*/React.createElement("textarea", {
@@ -4196,6 +4224,16 @@ function Relazione({
     onChange: e => set(k, e.target.value),
     placeholder: segnaposto || ""
   }));
+  const cambiaG = (i, k, val) => set("segnalati", segnalati.map((g, j) => j === i ? {
+    ...g,
+    [k]: val
+  } : g));
+  const togliG = i => set("segnalati", segnalati.filter((_, j) => j !== i));
+  const aggiungiG = () => set("segnalati", [...segnalati, {
+    squadra: match.opponent || "",
+    numero: "",
+    nome: ""
+  }]);
   return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Header, {
     title: "Relazione fine gara",
     sub: `${CLUB} · ${CAT}`,
@@ -4236,7 +4274,7 @@ function Relazione({
       marginBottom: 8
     }
   }, "1. Impianto"), area("Spogliatoi", "spogliatoi", "stato, pulizia, spazio, chiavi…"), area("Campo (tipo/condizioni)", "campo", "sintetico o erba, manto, illuminazione, recinzioni…"), /*#__PURE__*/React.createElement(Field, {
-    label: "Defibrillatore presente"
+    label: "Defibrillatore"
   }, /*#__PURE__*/React.createElement(Seg, {
     options: [{
       v: "SI",
@@ -4247,19 +4285,15 @@ function Relazione({
     }],
     value: r.defib,
     onChange: x => set("defib", x)
-  })), /*#__PURE__*/React.createElement("div", {
+  }), /*#__PURE__*/React.createElement("input", {
     style: {
-      fontSize: 16,
-      fontWeight: 800,
-      margin: "22px 0 4px"
-    }
-  }, "2. Gara"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      color: C.dim,
-      fontSize: 12,
-      marginBottom: 8
-    }
-  }, "Senza questioni tecniche: solo fatti."), area("Andamento", "andamento", "come si è svolta, clima generale…", 86), area("Sostituzioni", "sostituzioni", ""), cambiRegistrati && r.sostituzioni !== cambiRegistrati && /*#__PURE__*/React.createElement("div", {
+      ...inp,
+      marginTop: 8
+    },
+    value: r.defibNota,
+    onChange: e => set("defibNota", e.target.value),
+    placeholder: "nota facoltativa: dove si trova, chi lo sa usare\u2026"
+  })), titolo("2. Gara"), area("Andamento della gara", "andamento", "come si è svolta, clima generale…", 86), area("Sostituzioni effettuate", "sostituzioni", ""), cambiRegistrati && r.sostituzioni !== cambiRegistrati && /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: -8,
       marginBottom: 14
@@ -4272,37 +4306,108 @@ function Relazione({
       padding: "8px 0"
     },
     onClick: () => set("sostituzioni", cambiRegistrati)
-  }, "Reinserisci i cambi registrati in app")), area("Infortuni", "infortuni", "chi, quando, come è stato gestito, se è uscito…"), /*#__PURE__*/React.createElement("div", {
+  }, "Reinserisci i cambi registrati in app")), area("Infortuni", "infortuni", "chi, quando, come è stato gestito, se è uscito…"), titolo("3. Disciplina"), area("Panchina (comportamento e attenzione)", "panchina", "nostra panchina: contegno, richiami…"), area("Pubblico / Avversario", "pubblico", "comportamento del pubblico e dei tesserati avversari…"), titolo("4. Arbitro / autoarbitraggio"), area("Gestione della gara", "gestione", "conduzione della gara, autorevolezza…"), area("Correttezza", "correttezza", "imparzialità, episodi dubbi…"), titolo("5. Note / incidenti"), area("Ritardi, danni, episodi particolari", "note", "ritardi di inizio, danni a strutture, episodi da segnalare…", 86), titolo("6. Accoglienza / comportamento dirigenti avversari"), area("Come siamo stati accolti", "accoglienza", "accoglienza ricevuta, comportamento dei dirigenti avversari…", 86), titolo("7. Altro"), area("Altro", "altro", "qualunque cosa valga la pena mettere agli atti…", 86), titolo("8. Giocatori da segnalare", true), /*#__PURE__*/React.createElement("div", {
     style: {
-      fontSize: 16,
-      fontWeight: 800,
-      margin: "22px 0 8px"
+      color: C.dim,
+      fontSize: 12,
+      marginBottom: 10
     }
-  }, "3. Disciplina"), area("Panchina (comportamento, attenzione)", "panchina", "nostra panchina: contegno, richiami…"), area("Pubblico / Avversario", "pubblico", "comportamento del pubblico e dei tesserati avversari…"), /*#__PURE__*/React.createElement("div", {
+  }, "Avversari di talento da segnalare alla Societ\xE0. Se non c'\xE8 nessuno, lascia vuoto."), segnalati.map((g, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
     style: {
-      fontSize: 16,
-      fontWeight: 800,
-      margin: "22px 0 8px"
+      border: "1px solid " + C.line,
+      borderRadius: 12,
+      padding: 12,
+      marginBottom: 10
     }
-  }, "4. Arbitro o autoarbitraggio"), area("Gestione", "gestione", "conduzione della gara, autorevolezza…"), area("Correttezza", "correttezza", "imparzialità, episodi dubbi…"), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex gap2"
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
-      fontSize: 16,
-      fontWeight: 800,
-      margin: "22px 0 8px"
+      flex: 3
     }
-  }, "5. Note e incidenti"), area("Ritardi, danni, episodi", "note", "ritardi di inizio, danni a strutture, episodi da segnalare…", 86), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(Field, {
+    label: "Squadra"
+  }, /*#__PURE__*/React.createElement("input", {
+    style: inp,
+    value: g.squadra || "",
+    onChange: e => cambiaG(i, "squadra", e.target.value),
+    placeholder: "nome della squadra"
+  }))), /*#__PURE__*/React.createElement("div", {
     style: {
-      fontSize: 16,
-      fontWeight: 800,
-      margin: "22px 0 8px"
+      flex: 1
     }
-  }, "6. Accoglienza e dirigenti avversari"), area("Come siamo stati accolti", "accoglienza", "accoglienza ricevuta, comportamento dei dirigenti avversari…", 86), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(Field, {
+    label: "Numero"
+  }, /*#__PURE__*/React.createElement("input", {
+    style: inp,
+    inputMode: "numeric",
+    value: g.numero || "",
+    onChange: e => cambiaG(i, "numero", e.target.value),
+    placeholder: "n."
+  })))), /*#__PURE__*/React.createElement(Field, {
+    label: "Nome e cognome"
+  }, /*#__PURE__*/React.createElement("input", {
+    style: inp,
+    value: g.nome || "",
+    onChange: e => cambiaG(i, "nome", e.target.value),
+    placeholder: "se lo conosci"
+  })), /*#__PURE__*/React.createElement(Btn, {
+    tone: "ghost",
     style: {
-      fontSize: 16,
-      fontWeight: 800,
-      margin: "22px 0 8px"
-    }
-  }, "7. Altro"), area("Altro", "altro", "qualunque cosa valga la pena mettere agli atti…", 86), /*#__PURE__*/React.createElement("div", {
+      width: "100%",
+      fontSize: 13,
+      padding: "8px 0"
+    },
+    onClick: () => togliG(i)
+  }, "Togli"))), /*#__PURE__*/React.createElement(Btn, {
+    tone: "ghost",
+    style: {
+      width: "100%",
+      fontSize: 14,
+      padding: "10px 0",
+      marginBottom: 6
+    },
+    onClick: aggiungiG
+  }, segnalati.length ? "Aggiungi un altro giocatore" : "Aggiungi un giocatore"), titolo("Riepilogo finale"), /*#__PURE__*/React.createElement(Field, {
+    label: "La gara si \xE8 svolta regolarmente?"
+  }, /*#__PURE__*/React.createElement(Seg, {
+    options: [{
+      v: "SI",
+      l: "SI"
+    }, {
+      v: "NO",
+      l: "NO"
+    }],
+    value: r.regolare,
+    onChange: x => set("regolare", x)
+  })), /*#__PURE__*/React.createElement(Field, {
+    label: "Sono necessarie segnalazioni alla Societ\xE0?"
+  }, /*#__PURE__*/React.createElement(Seg, {
+    options: [{
+      v: "NO",
+      l: "NO"
+    }, {
+      v: "SI",
+      l: "SI"
+    }],
+    value: r.segnalazioni,
+    onChange: x => set("segnalazioni", x)
+  })), r.segnalazioni === "SI" && area("Quali segnalazioni", "segnalazioniNota", "cosa va segnalato e a chi…", 86), /*#__PURE__*/React.createElement(Field, {
+    label: "Dirigente accompagnatore"
+  }, /*#__PURE__*/React.createElement("input", {
+    style: inp,
+    value: r.dirigente,
+    onChange: e => set("dirigente", e.target.value),
+    placeholder: "nome e cognome"
+  })), /*#__PURE__*/React.createElement(Field, {
+    label: "Data della relazione"
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "date",
+    style: inp,
+    value: r.dataRel,
+    onChange: e => set("dataRel", e.target.value)
+  })), /*#__PURE__*/React.createElement("div", {
     className: "mt5"
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -4564,6 +4669,10 @@ function App() {
     match: find(screen.id),
     roster: db.roster,
     update: upsert,
+    dirigente: (() => {
+      const xs = (db.matches || []).filter(x => x.id !== screen.id && x.relazione && x.relazione.dirigente && String(x.relazione.dirigente).trim()).sort((p, q) => String(q.date || "").localeCompare(String(p.date || "")));
+      return xs.length ? xs[0].relazione.dirigente : "";
+    })(),
     onBack: () => { setScreen(null); setTab("storico"); }
   });else if (screen && screen.name === "form" && admin) body = /*#__PURE__*/React.createElement(ConvForm, {
     roster: db.roster,
