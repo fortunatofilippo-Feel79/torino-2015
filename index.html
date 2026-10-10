@@ -522,6 +522,25 @@ const outcome = m => {
   const [u, t] = scoreOf(m);
   return u > t ? "V" : u < t ? "P" : "N";
 };
+// Lati del punteggio: a sinistra sempre la squadra di casa, a destra l'ospite
+const lati = m => {
+  const [u, t] = scoreOf(m);
+  const noi = {
+    nome: CLUB,
+    gol: u,
+    noi: true
+  };
+  const loro = {
+    nome: m.opponent || "Avversario",
+    gol: t,
+    noi: false
+  };
+  return m.home ? [noi, loro] : [loro, noi];
+};
+const risultatoTesto = m => {
+  const [a, b] = lati(m);
+  return a.nome + " " + a.gol + "\u2013" + b.gol + " " + b.nome;
+};
 const parzialiTesto = m => {
   const n = m.periods || 1;
   if (n < 2 || !(m.goals || []).length) return null;
@@ -530,7 +549,9 @@ const parzialiTesto = m => {
   for (let p = 1; p <= max; p++) {
     const gp = m.goals.filter(g => (g.period || 1) === p);
     if (p > n && !gp.length) continue;
-    out.push(p + "\u00ba " + gp.filter(g => g.team === "us").length + "\u2013" + gp.filter(g => g.team !== "us").length);
+    const nostri = gp.filter(g => g.team === "us").length,
+      loro = gp.filter(g => g.team !== "us").length;
+    out.push(p + "\u00ba " + (m.home ? nostri + "\u2013" + loro : loro + "\u2013" + nostri));
   }
   return out.join(" \u00b7 ");
 };
@@ -1465,6 +1486,7 @@ function LiveMatch({
   const period = match.cur || 1;
   const durata = match.durata || 15;
   const [us, them] = scoreOf(match);
+  const [latoSx, latoDx] = lati(match);
   const squad = roster.filter(p => match.squad.includes(p.id));
   const clock = (match.clocks || {})[period] || {
     el: 0,
@@ -1705,9 +1727,16 @@ function LiveMatch({
       }
     }, "Convocazione")
   }), /*#__PURE__*/React.createElement("div", {
-    className: "flex ie jc gap3 px4 pt6 pb4"
+    className: "flex jc gap3 px4 pt6 pb4",
+    style: {
+      alignItems: "flex-start"
+    }
   }, /*#__PURE__*/React.createElement("div", {
-    className: "tc"
+    className: "tc",
+    style: {
+      flex: 1,
+      minWidth: 0
+    }
   }, /*#__PURE__*/React.createElement("div", {
     className: "num",
     style: {
@@ -1715,23 +1744,30 @@ function LiveMatch({
       fontWeight: 800,
       lineHeight: 1,
       letterSpacing: -3,
-      color: C.gr
+      color: latoSx.noi ? C.gr : C.dim
     }
-  }, us), /*#__PURE__*/React.createElement("div", {
+  }, latoSx.gol), /*#__PURE__*/React.createElement("div", {
     style: {
-      color: C.dim,
+      color: latoSx.noi ? C.gr : C.dim,
+      fontWeight: latoSx.noi ? 700 : 400,
       fontSize: 13,
-      marginTop: 4
+      marginTop: 4,
+      lineHeight: 1.25,
+      wordBreak: "break-word"
     }
-  }, "noi")), /*#__PURE__*/React.createElement("div", {
+  }, latoSx.nome)), /*#__PURE__*/React.createElement("div", {
     style: {
       color: C.line,
       fontSize: 38,
       fontWeight: 300,
-      paddingBottom: 16
+      paddingTop: 10
     }
-  }, "–"), /*#__PURE__*/React.createElement("div", {
-    className: "tc"
+  }, "\u2013"), /*#__PURE__*/React.createElement("div", {
+    className: "tc",
+    style: {
+      flex: 1,
+      minWidth: 0
+    }
   }, /*#__PURE__*/React.createElement("div", {
     className: "num",
     style: {
@@ -1739,15 +1775,18 @@ function LiveMatch({
       fontWeight: 800,
       lineHeight: 1,
       letterSpacing: -3,
-      color: C.dim
+      color: latoDx.noi ? C.gr : C.dim
     }
-  }, them), /*#__PURE__*/React.createElement("div", {
+  }, latoDx.gol), /*#__PURE__*/React.createElement("div", {
     style: {
-      color: C.dim,
+      color: latoDx.noi ? C.gr : C.dim,
+      fontWeight: latoDx.noi ? 700 : 400,
       fontSize: 13,
-      marginTop: 4
+      marginTop: 4,
+      lineHeight: 1.25,
+      wordBreak: "break-word"
     }
-  }, "loro"))), /*#__PURE__*/React.createElement("div", {
+  }, latoDx.nome))), /*#__PURE__*/React.createElement("div", {
     className: "px4"
   }, /*#__PURE__*/React.createElement("div", {
     className: "flex ic jb",
@@ -2308,7 +2347,14 @@ function Gare({
       fontSize: 12,
       fontWeight: 800
     }
-  }, "in corso · ", scoreOf(m)[0], "–", scoreOf(m)[1])), /*#__PURE__*/React.createElement("div", {
+  }, "in corso")), m.status === "live" && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.gr,
+      fontSize: 14,
+      fontWeight: 700,
+      marginTop: 4
+    }
+  }, risultatoTesto(m)), /*#__PURE__*/React.createElement("div", {
     style: {
       color: C.dim,
       fontSize: 13,
@@ -2364,7 +2410,7 @@ function History({
       fontSize: 15
     }
   }, "Nessuna partita chiusa finora."), list.map(m => {
-    const [u, t] = scoreOf(m);
+    const [latoSx, latoDx] = lati(m);
     const o = outcome(m);
     const col = o === "V" ? C.gr : o === "P" ? C.dim : C.warn;
     const sc = m.goals.filter(g => g.team === "us" && g.playerId).map(g => (roster.find(p => p.id === g.playerId) || {}).name).filter(Boolean);
@@ -2392,20 +2438,49 @@ function History({
         fontSize: 13,
         marginTop: 2
       }
-    }, fmtDate(m.date), " · ", typeLabel(m), " · ", m.periods, " tempi")), /*#__PURE__*/React.createElement("div", {
+    }, fmtDate(m.date), " · ", typeLabel(m), " · ", m.periods, " tempi"))), /*#__PURE__*/React.createElement("div", {
+      className: "flex ic jc gap3",
+      style: {
+        marginTop: 10
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 1,
+        minWidth: 0,
+        textAlign: "right",
+        fontSize: 14,
+        lineHeight: 1.25,
+        fontWeight: latoSx.noi ? 800 : 500,
+        color: latoSx.noi ? C.gr : C.txt,
+        wordBreak: "break-word"
+      }
+    }, latoSx.nome), /*#__PURE__*/React.createElement("div", {
       className: "num",
       style: {
         fontSize: 24,
         fontWeight: 800,
-        color: col
+        color: col,
+        whiteSpace: "nowrap"
       }
-    }, u, "–", t)), parz && /*#__PURE__*/React.createElement("div", {
+    }, latoSx.gol, "–", latoDx.gol), /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 1,
+        minWidth: 0,
+        textAlign: "left",
+        fontSize: 14,
+        lineHeight: 1.25,
+        fontWeight: latoDx.noi ? 800 : 500,
+        color: latoDx.noi ? C.gr : C.txt,
+        wordBreak: "break-word"
+      }
+    }, latoDx.nome)), parz && /*#__PURE__*/React.createElement("div", {
       className: "num",
       style: {
         color: col,
         fontSize: 13,
         fontWeight: 600,
-        marginTop: 8
+        marginTop: 4,
+        textAlign: "center"
       }
     }, parz), sc.length > 0 && /*#__PURE__*/React.createElement("div", {
       style: {
@@ -2526,7 +2601,7 @@ function Stats({
       };
     });
   }, [vistaGara, gara, ord, s, roster]);
-  const sottotitolo = vistaGara ? (gara.opponent || "Avversario") + " \u00b7 " + fmtDate(gara.date) + " \u00b7 " + scoreOf(gara)[0] + "\u2013" + scoreOf(gara)[1] + " \u00b7 " + gara.periods + " tempi da " + (gara.durata || 15) + "\u2032" : "Dal pi\u00f9 coinvolto al meno. Su " + s.gareTot + " gare, " + s.minutiSquadra + " minuti giocabili ciascuno.";
+  const sottotitolo = vistaGara ? risultatoTesto(gara) + " \u00b7 " + fmtDate(gara.date) + " \u00b7 " + gara.periods + " tempi da " + (gara.durata || 15) + "\u2032" : "Dal pi\u00f9 coinvolto al meno. Su " + s.gareTot + " gare, " + s.minutiSquadra + " minuti giocabili ciascuno.";
   const colore = c => c === "warn" ? C.warn : c === "gr" ? C.gr : C.dim;
   useEffect(() => {
     if (readOnly) return;
@@ -2559,8 +2634,16 @@ function Stats({
       x.font = F(30, 500);
       x.fillText(vistaGara ? `Ultima gara \u00b7 ${CAT}` : `Statistiche ${CAT} \u00b7 ${s.total} partite`, 245, 170);
       x.fillStyle = C.txt;
-      x.font = F(34, 700);
-      x.fillText(vistaGara ? `${gara.opponent || "Avversario"}   ${scoreOf(gara)[0]}\u2013${scoreOf(gara)[1]}   ${fmtDate(gara.date)}` : `${s.v}V  ${s.n}N  ${s.s}P   \u00b7   gol ${s.gf}:${s.gs}`, 245, 223);
+      {
+        const riga1 = vistaGara ? `${risultatoTesto(gara)}   ${fmtDate(gara.date)}` : `${s.v}V  ${s.n}N  ${s.s}P   \u00b7   gol ${s.gf}:${s.gs}`;
+        let fs = 34;
+        x.font = F(fs, 700);
+        while (fs > 22 && x.measureText(riga1).width > W - 245 - 60) {
+          fs -= 1;
+          x.font = F(fs, 700);
+        }
+        x.fillText(riga1, 245, 223);
+      }
       let y = 290;
       x.strokeStyle = C.line;
       x.lineWidth = 2;
