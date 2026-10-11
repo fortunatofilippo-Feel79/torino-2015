@@ -462,7 +462,8 @@ const C = {
 const emptyDB = {
   version: 4,
   roster: [],
-  matches: []
+  matches: [],
+  tornei: []
 };
 const uid = () => Math.random().toString(36).slice(2, 10);
 const TYPES = [{
@@ -667,7 +668,7 @@ function download(content, filename, type) {
 
 /* ---------------- testo convocazione ---------------- */
 
-function buildText(m, roster) {
+function buildText(m, roster, extra) {
   const players = roster.filter(p => m.squad.includes(p.id));
   const L = [];
   L.push(`⚽ *${CLUB}* — Convocazione`);
@@ -675,6 +676,7 @@ function buildText(m, roster) {
   L.push("");
   L.push(`📅 ${cap(fmtLong(m.date))}`);
   if (m.opponent) L.push(`🆚 ${m.opponent}`);
+  if (extra && extra.prec) L.push("📊 " + extra.prec);
   L.push(m.home ? "🏟️ In casa" : "✈️ In trasferta");
   if (m.address) {
     L.push(`📍 ${m.address}`);
@@ -682,6 +684,7 @@ function buildText(m, roster) {
   }
   if (m.meetTime) L.push(`⏰ Ritrovo ${m.meetTime}`);
   if (m.kickoffTime) L.push(`🕐 Inizio gara ${m.kickoffTime}`);
+  if (extra && extra.meteo) L.push(extra.meteo.emoji + " " + meteoRiga(extra.meteo));
   L.push("");
   L.push(`👕 *Convocati (${players.length})*`);
   players.forEach(p => L.push(`• ${p.name}`));
@@ -874,6 +877,23 @@ const timbro = prec => Math.max(Date.now(), (prec || 0) + 1);
 /* Unisce la copia del telefono con quella del server, gara per gara.
    Vince la versione con l'ora di modifica piu recente; a parita vince il server,
    perche una modifica fatta qui avrebbe un'ora piu recente. */
+function unisciLista(locL, remL, del) {
+  const mod = m => m && m.mod || 0;
+  const byId = {};
+  const ordine = [];
+  for (const m of remL || []) {
+    byId[m.id] = m;
+    ordine.push(m.id);
+  }
+  for (const m of locL || []) {
+    const r = byId[m.id];
+    if (!r) {
+      byId[m.id] = m;
+      ordine.push(m.id);
+    } else if (mod(m) > mod(r)) byId[m.id] = m;
+  }
+  return ordine.map(id => byId[id]).filter(m => !(del[m.id] && del[m.id] >= mod(m)));
+}
 function unisci(loc, rem) {
   if (!rem) return loc;
   if (!loc) return rem;
@@ -881,33 +901,28 @@ function unisci(loc, rem) {
     ...(rem.deleted || {})
   };
   for (const k of Object.keys(loc.deleted || {})) del[k] = Math.max(del[k] || 0, loc.deleted[k]);
-  const mod = m => m && m.mod || 0;
-  const byId = {};
-  const ordine = [];
-  for (const m of rem.matches || []) {
-    byId[m.id] = m;
-    ordine.push(m.id);
-  }
-  for (const m of loc.matches || []) {
-    const r = byId[m.id];
-    if (!r) {
-      byId[m.id] = m;
-      ordine.push(m.id);
-    } else if (mod(m) > mod(r)) byId[m.id] = m;
-  }
   const limite = Date.now() - 180 * 24 * 3600 * 1000;
   for (const k of Object.keys(del)) if (del[k] < limite) delete del[k];
-  const matches = ordine.map(id => byId[id]).filter(m => !(del[m.id] && del[m.id] >= mod(m)));
+  const matches = unisciLista(loc.matches, rem.matches, del);
+  // tornei: stessa regola delle gare (dall'ottobre 2026)
+  const tornei = unisciLista(loc.tornei, rem.tornei, del);
+  // impostazioni dell'annata (campo per i genitori): vince la piu recente
+  const li = loc.impostazioni,
+    ri = rem.impostazioni;
+  const impostazioni = li && ri ? (li.mod || 0) > (ri.mod || 0) ? li : ri : li || ri;
   const rl = loc.rosterMod || 0,
     rr = rem.rosterMod || 0;
-  return {
+  const out = {
     ...rem,
     ...loc,
     matches,
+    tornei,
     deleted: del,
     roster: rl > rr ? loc.roster : rem.roster || loc.roster,
     rosterMod: Math.max(rl, rr)
   };
+  if (impostazioni) out.impostazioni = impostazioni;else delete out.impostazioni;
+  return out;
 }
 const uguali = (a, b) => {
   try {
@@ -957,15 +972,18 @@ const linkAiutanteCon = codice => {
     return "";
   }
 };
+const ordineGare = (a, b) => String(a.date || "").localeCompare(String(b.date || "")) || String(a.kickoffTime || "99:99").localeCompare(String(b.kickoffTime || "99:99")) || (a.creato || 0) - (b.creato || 0);
 function prossimaGara(matches) {
   const oggi = oggiISO();
-  const xs = (matches || []).filter(m => m.status !== "done").slice().sort((a, b) => a.date > b.date ? 1 : -1);
+  const xs = (matches || []).filter(m => m.status !== "done").slice().sort(ordineGare);
   return xs.find(m => m.status === "live") || xs.find(m => m.date >= oggi) || xs[0] || null;
 }
 function testoAiutante(codice, gara) {
   const L = [];
   L.push("Ciao! Grazie per segnare la partita ⚽");
-  if (gara) {
+  if (gara && gara.torneoId) {
+    L.push("Torneo " + (gara.tournament || "") + ", " + fmtLong(gara.date) + (gara.kickoffTime ? ", prima partita alle " + gara.kickoffTime : ""));
+  } else if (gara) {
     const [a, b] = lati(gara);
     L.push(a.nome + " – " + b.nome + ", " + fmtLong(gara.date) + (gara.kickoffTime ? " ore " + gara.kickoffTime : ""));
   }
@@ -977,7 +995,7 @@ function testoAiutante(codice, gara) {
     L.push("Il codice per entrare te lo mando a parte.");
   }
   L.push("");
-  L.push("1. Tocca «Inizia la partita»");
+  L.push(gara && gara.torneoId ? "1. Tocca «Inizia» sulla partita del torneo (le nuove le aggiungi tu)" : "1. Tocca «Inizia la partita»");
   L.push("2. Tocca i nomi di chi è in campo, poi «Avvia» al fischio");
   L.push("3. Gol e cambi: un tocco, si annulla subito");
   L.push("4. A fine tempo «Fine tempo»; alla fine «Chiudi la partita»");
@@ -1133,12 +1151,15 @@ function Toast({
 
 function AiutanteHome({
   matches,
+  tornei,
   onStart,
   openLive,
   riapri,
   esci,
   stato,
-  pending
+  pending,
+  salvaPartita,
+  eliminaPartita
 }) {
   const [scelta, setScelta] = useState(null);
   const [ask, setAsk] = useState(false);
@@ -1151,10 +1172,11 @@ function AiutanteHome({
     return () => clearInterval(t);
   }, []);
   const oggi = oggiISO();
-  const aperte = matches.filter(m => m.status !== "done").slice().sort((a, b) => a.date > b.date ? 1 : -1);
+  const torneo = torneoAttivoOggi(tornei, matches);
+  const aperte = matches.filter(m => m.status !== "done" && !(torneo && m.torneoId === torneo.id)).slice().sort(ordineGare);
   const live = aperte.find(m => m.status === "live");
   const chiusa = matches.filter(m => m.status === "done" && m.closedAt && Date.now() - m.closedAt < RIAPRI_MIN * 60000).sort((a, b) => b.closedAt - a.closedAt)[0];
-  const appenaChiusa = chiusa && !scelta && !live;
+  const appenaChiusa = chiusa && !scelta && !live && !(torneo && partiteDi(torneo, matches).some(m => m.status === "live"));
   const gara = appenaChiusa ? chiusa : scelta && aperte.find(m => m.id === scelta) || live || aperte.find(m => m.date === oggi) || aperte.find(m => m.date >= oggi) || aperte[0] || null;
   const diOggi = gara && gara.date === oggi;
   const [periods, setPeriods] = useState(3);
@@ -1211,7 +1233,28 @@ function AiutanteHome({
       width: 54,
       height: 58
     }
-  }), gara ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }), torneo && !scelta ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14,
+      opacity: .9,
+      marginTop: 8,
+      letterSpacing: ".04em",
+      textTransform: "uppercase"
+    }
+  }, "Torneo · ", fmtLong(torneo.date)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 23,
+      fontWeight: 800,
+      marginTop: 6,
+      lineHeight: 1.2
+    }
+  }, torneo.nome || "Torneo"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 15,
+      opacity: .92,
+      marginTop: 6
+    }
+  }, torneo.home ? "In casa" : "Fuori casa", torneo.meetTime ? " · ritrovo " + torneo.meetTime : "", " · ", (torneo.squad || []).length, " convocati")) : gara ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 14,
       opacity: .9,
@@ -1244,7 +1287,18 @@ function AiutanteHome({
       paddingTop: 14,
       paddingBottom: 30
     }
-  }, appenaChiusa && /*#__PURE__*/React.createElement("div", {
+  }, torneo && scelta && /*#__PURE__*/React.createElement("button", {
+    onClick: () => setScelta(null),
+    style: {
+      background: "none",
+      border: "none",
+      color: C.gr,
+      fontWeight: 800,
+      fontSize: 15,
+      padding: "6px 0 12px",
+      cursor: "pointer"
+    }
+  }, "‹ Torna al torneo ", torneo.nome), appenaChiusa && /*#__PURE__*/React.createElement("div", {
     style: {
       background: "#E8F3EA",
       borderRadius: 14,
@@ -1274,7 +1328,39 @@ function AiutanteHome({
       width: "100%",
       marginTop: 10
     }
-  }, "Riapri la partita")), gara && gara.status === "live" && /*#__PURE__*/React.createElement(Btn, {
+  }, "Riapri la partita")), torneo && !scelta && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 6
+    }
+  }, /*#__PURE__*/React.createElement(TorneoPannello, {
+    torneo: torneo,
+    partite: partiteDi(torneo, matches),
+    puoSegnare: true,
+    salvaPartita: salvaPartita,
+    eliminaPartita: eliminaPartita,
+    avvia: (id, p, d, extra) => onStart(id, p, d, extra),
+    apriLive: openLive
+  }), torneo.regole && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.sur,
+      border: "1px solid " + C.line,
+      borderRadius: 12,
+      padding: 14,
+      marginTop: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      color: C.dim,
+      marginBottom: 4
+    }
+  }, "Regole e note del dirigente"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 15,
+      whiteSpace: "pre-wrap",
+      lineHeight: 1.5
+    }
+  }, torneo.regole))), !(torneo && !scelta) && gara && gara.status === "live" && /*#__PURE__*/React.createElement(Btn, {
     tone: "solid",
     onClick: () => openLive(gara.id),
     style: {
@@ -1283,7 +1369,7 @@ function AiutanteHome({
       fontSize: 19,
       fontWeight: 800
     }
-  }, "Torna alla partita"), gara && gara.status === "convocata" && /*#__PURE__*/React.createElement(React.Fragment, null, !diOggi && /*#__PURE__*/React.createElement("div", {
+  }, "Torna alla partita"), !(torneo && !scelta) && gara && gara.status === "convocata" && /*#__PURE__*/React.createElement(React.Fragment, null, !diOggi && /*#__PURE__*/React.createElement("div", {
     style: {
       background: C.tint,
       border: "1px solid " + C.gr,
@@ -1326,7 +1412,7 @@ function AiutanteHome({
       fontSize: 14,
       marginTop: 8
     }
-  }, "Senza campo continua pure: l'app invia tutto da sola appena torna la rete.")), aperte.filter(m => !gara || m.id !== gara.id).length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, "Senza campo continua pure: l'app invia tutto da sola appena torna la rete.")), aperte.filter(m => !gara || m.id !== gara.id || torneo && !scelta).length > 0 && /*#__PURE__*/React.createElement("div", {
     className: "tc mt4"
   }, /*#__PURE__*/React.createElement("button", {
     onClick: () => setAltre(!altre),
@@ -1339,7 +1425,7 @@ function AiutanteHome({
       padding: 12,
       cursor: "pointer"
     }
-  }, altre ? "Nascondi le altre gare" : "Altre gare ›")), altre && aperte.filter(m => !gara || m.id !== gara.id).map(m => {
+  }, altre ? "Nascondi le altre gare" : "Altre gare ›")), altre && aperte.filter(m => !gara || m.id !== gara.id || torneo && !scelta).map(m => {
     const [a, b] = lati(m);
     return /*#__PURE__*/React.createElement("button", {
       key: m.id,
@@ -1551,6 +1637,2493 @@ function SbloccaAiutante({
       lineHeight: 1.5
     }
   }, msg))));
+}
+
+/* ============================================================
+   Ottobre 2026 — tornei: un contenitore di partite normali.
+   L'app non calcola il torneo (punti e classifica li tiene
+   l'organizzatore): registra la nostra giornata.
+   ============================================================ */
+const FASI = ["Girone", "Quarti", "Semifinale", "Finale 1°–2°", "Finale 3°–4°", "Triangolare", "Quadrangolare"];
+const POSIZIONI = ["1°", "2°", "3°", "4°", "5°", "6°", "7°", "8°"];
+const TEMPI_TORNEO = [1, 2, 3, 4];
+const DURATE_TORNEO = [8, 10, 12, 15, 20, 25];
+const nomeAvv = m => (m && m.opponent || "").trim() || "Da definire";
+const ordinePartite = (a, b) => String(a.date || "").localeCompare(String(b.date || "")) || String(a.kickoffTime || "99:99").localeCompare(String(b.kickoffTime || "99:99")) || (a.creato || 0) - (b.creato || 0);
+const partiteDi = (t, matches) => (matches || []).filter(m => m.torneoId === t.id).sort(ordinePartite);
+const rigoriTesto = m => {
+  const r = m && m.rigori;
+  if (!r || r.noi == null || r.loro == null || r.noi === "" || r.loro === "") return "";
+  return "rigori " + (m.home ? r.noi + "–" + r.loro : r.loro + "–" + r.noi);
+};
+const risultatoPartitaTorneo = m => {
+  const [a, b] = lati({
+    ...m,
+    opponent: nomeAvv(m)
+  });
+  const r = rigoriTesto(m);
+  return a.nome + " " + a.gol + "–" + b.gol + " " + b.nome + (r ? " (" + r + ")" : "");
+};
+function bilancioTorneo(partite) {
+  let v = 0,
+    n = 0,
+    p = 0,
+    gf = 0,
+    gs = 0;
+  for (const m of partite) {
+    if (m.status !== "done") continue;
+    const [u, t] = scoreOf(m);
+    gf += u;
+    gs += t;
+    const o = outcome(m);
+    if (o === "V") v++;else if (o === "P") p++;else n++;
+  }
+  return {
+    v,
+    n,
+    p,
+    gf,
+    gs,
+    giocate: v + n + p
+  };
+}
+const bilancioTesto = b => b.v + "V " + b.n + "N " + b.p + "P · gol " + b.gf + "–" + b.gs;
+const torneoAttivoOggi = (tornei, matches) => {
+  const oggi = oggiISO();
+  return (tornei || []).filter(t => t.status !== "chiuso").find(t => t.date === oggi || partiteDi(t, matches).some(m => m.status === "live" || m.date === oggi)) || null;
+};
+function rigaPartita(m) {
+  return [m.kickoffTime || null, m.fase || null, "vs " + nomeAvv(m)].filter(Boolean).join(" · ");
+}
+
+/* testo per il gruppo WhatsApp: stesse informazioni dell'immagine */
+function testoTorneo(t, partite, roster, meteo) {
+  const players = roster.filter(p => (t.squad || []).includes(p.id));
+  const L = [];
+  L.push(`⚽ *${CLUB}* — Convocazione torneo`);
+  L.push(`🏅 ${t.nome || "Torneo"}`);
+  L.push("");
+  L.push(`📅 ${cap(fmtLong(t.date))}`);
+  L.push(t.home ? "🏟️ In casa" : "✈️ Fuori casa");
+  if (t.address) {
+    L.push(`📍 ${t.address}`);
+    L.push(`🗺️ https://maps.google.com/?q=${encodeURIComponent(t.address)}`);
+  }
+  if (t.meetTime) L.push(`⏰ Ritrovo ${t.meetTime}`);
+  if (meteo) L.push(meteo.emoji + " " + meteoRiga(meteo));
+  if (partite.length) {
+    L.push("");
+    L.push(`🗓️ *Partite (${partite.length})*`);
+    partite.forEach(m => L.push("• " + (m.date && m.date !== t.date ? fmtDate(m.date) + " · " : "") + rigaPartita(m)));
+  }
+  L.push("");
+  L.push(`👕 *Convocati (${players.length})*`);
+  players.forEach(p => L.push(`• ${p.name}`));
+  if (t.notes) {
+    L.push("");
+    L.push(`🎒 Da portare: ${t.notes}`);
+  }
+  return L.join("\n");
+}
+
+/* Google Calendar: dal ritrovo all'ultima partita (+1 ora); senza orari, giornata intera */
+function linkCalendarioTorneo(t, partite) {
+  const titolo = "⚽ 🏅 TORNEO – " + (t.nome || "Torneo") + (t.home ? " (in casa)" : "");
+  const d = (t.date || "").replace(/-/g, "");
+  const orari = [t.meetTime, ...partite.filter(m => !m.date || m.date === t.date).map(m => m.kickoffTime)].filter(x => /^\d{1,2}:\d{2}$/.test(x || "")).sort();
+  const f = x => x.getFullYear() + String(x.getMonth() + 1).padStart(2, "0") + String(x.getDate()).padStart(2, "0") + "T" + String(x.getHours()).padStart(2, "0") + String(x.getMinutes()).padStart(2, "0") + "00";
+  let dates = "";
+  if (d && orari.length) {
+    const y = Number(d.slice(0, 4)),
+      mo = Number(d.slice(4, 6)) - 1,
+      g = Number(d.slice(6, 8));
+    const [h1, m1] = orari[0].split(":").map(Number);
+    const [h2, m2] = orari[orari.length - 1].split(":").map(Number);
+    const ini = new Date(y, mo, g, h1, m1);
+    const fine = new Date(new Date(y, mo, g, h2, m2).getTime() + 60 * 60000);
+    dates = f(ini) + "/" + f(fine.getTime() - ini.getTime() < 90 * 60000 ? new Date(ini.getTime() + 4 * 3600000) : fine);
+  } else if (d) {
+    const y = Number(d.slice(0, 4)),
+      mo = Number(d.slice(4, 6)) - 1,
+      g = Number(d.slice(6, 8));
+    const dopo = new Date(y, mo, g + 1);
+    dates = d + "/" + dopo.getFullYear() + String(dopo.getMonth() + 1).padStart(2, "0") + String(dopo.getDate()).padStart(2, "0");
+  }
+  const det = [];
+  if (t.meetTime) det.push("Ritrovo " + t.meetTime);
+  partite.forEach(m => det.push(rigaPartita(m)));
+  det.push("Torneo · " + CLUB + " " + CAT);
+  if (t.notes) det.push("Da portare: " + t.notes);
+  const p = new URLSearchParams({
+    action: "TEMPLATE",
+    text: titolo,
+    details: det.join("\n"),
+    ctz: "Europe/Rome"
+  });
+  if (dates) p.set("dates", dates);
+  if (t.address) p.set("location", t.address);
+  return "https://calendar.google.com/calendar/render?" + p.toString();
+}
+
+/* dati per la relazione unica del torneo (stessa scheda della società) */
+function infoRelazioneTorneo(t, partite, roster) {
+  const giocate = partite.filter(m => m.status === "done");
+  const b = bilancioTorneo(giocate);
+  const n = id => (roster.find(p => p.id === id) || {}).name || "—";
+  const andamento = giocate.map(m => (m.fase ? m.fase + ": " : "") + risultatoPartitaTorneo(m)).join("\n");
+  const sost = giocate.map(m => {
+    const xs = (m.subs || []).map(c => n(c.out) + " esce, entra " + n(c.in) + " (" + c.p + "º, " + mmss(c.sec) + ")");
+    return xs.length ? "vs " + nomeAvv(m) + ": " + xs.join("; ") : "";
+  }).filter(Boolean).join("\n");
+  return {
+    intestazione: {
+      gara: CLUB + " " + CAT + " · " + (t.nome || "Torneo") + " (" + giocate.length + (giocate.length === 1 ? " partita)" : " partite)"),
+      tipo: "Torneo",
+      risultato: (t.posizione ? t.posizione + " posto · " : "") + bilancioTesto(b)
+    },
+    andamento,
+    sostituzioni: sost
+  };
+}
+
+/* ---------------- form del torneo ---------------- */
+
+function TorneoForm({
+  roster,
+  initial,
+  ultima,
+  onSave,
+  onBack
+}) {
+  const [t, setT] = useState(initial || {
+    id: uid(),
+    nome: "",
+    date: oggiISO(),
+    home: false,
+    address: "",
+    meetTime: "",
+    notes: "",
+    regole: "",
+    squad: ultima && ultima.ids.length ? ultima.ids : roster.map(p => p.id),
+    status: "aperto",
+    creato: Date.now()
+  });
+  const set = (k, v) => setT({
+    ...t,
+    [k]: v
+  });
+  if (!roster.length) return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Header, {
+    title: "Nuovo torneo",
+    onBack: onBack
+  }), /*#__PURE__*/React.createElement("div", {
+    className: "px4 py10 tc"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 17,
+      fontWeight: 700,
+      marginBottom: 8
+    }
+  }, "Prima serve la rosa"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 15
+    }
+  }, "Vai su Squadra e aggiungi i ragazzi, poi torna qui.")));
+  return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Header, {
+    title: initial ? "Modifica torneo" : "Nuovo torneo",
+    onBack: onBack
+  }), /*#__PURE__*/React.createElement("div", {
+    className: "px4 py5"
+  }, /*#__PURE__*/React.createElement(Field, {
+    label: "Nome del torneo"
+  }, /*#__PURE__*/React.createElement("input", {
+    style: inp,
+    value: t.nome,
+    onChange: e => set("nome", e.target.value),
+    placeholder: "es. Trofeo Città di Gallarate"
+  })), /*#__PURE__*/React.createElement(Field, {
+    label: "Data"
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "date",
+    style: inp,
+    value: t.date,
+    onChange: e => set("date", e.target.value)
+  })), /*#__PURE__*/React.createElement(Field, {
+    label: "Dove si gioca"
+  }, /*#__PURE__*/React.createElement(Seg, {
+    options: [{
+      v: true,
+      l: "In casa"
+    }, {
+      v: false,
+      l: "Fuori casa"
+    }],
+    value: t.home,
+    onChange: v => set("home", v)
+  })), /*#__PURE__*/React.createElement(Field, {
+    label: "Indirizzo del campo"
+  }, /*#__PURE__*/React.createElement("input", {
+    style: inp,
+    value: t.address,
+    onChange: e => set("address", e.target.value),
+    placeholder: "Via, numero, città"
+  })), /*#__PURE__*/React.createElement(Field, {
+    label: "Ritrovo"
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "time",
+    style: inp,
+    value: t.meetTime,
+    onChange: e => set("meetTime", e.target.value)
+  })), /*#__PURE__*/React.createElement(Field, {
+    label: "Cosa portare"
+  }, /*#__PURE__*/React.createElement("textarea", {
+    style: {
+      ...inp,
+      minHeight: 70,
+      resize: "vertical"
+    },
+    value: t.notes,
+    onChange: e => set("notes", e.target.value),
+    placeholder: "parastinchi, borraccia, pranzo al sacco…"
+  })), /*#__PURE__*/React.createElement(Field, {
+    label: "Regole e note (le vedete solo tu e l'aiutante)"
+  }, /*#__PURE__*/React.createElement("textarea", {
+    style: {
+      ...inp,
+      minHeight: 70,
+      resize: "vertical"
+    },
+    value: t.regole,
+    onChange: e => set("regole", e.target.value),
+    placeholder: "es. 2 gironi da 4, poi prima con prima; partite da 2 tempi da 10′; in parità rigori"
+  })), /*#__PURE__*/React.createElement(Field, {
+    label: `Convocati (${t.squad.length} di ${roster.length})`
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex gap2",
+    style: {
+      marginBottom: 8
+    }
+  }, /*#__PURE__*/React.createElement(Btn, {
+    tone: "ghost",
+    onClick: () => set("squad", roster.map(p => p.id)),
+    style: {
+      flex: 1,
+      padding: "8px 0",
+      fontSize: 13
+    }
+  }, "Tutti"), /*#__PURE__*/React.createElement(Btn, {
+    tone: "ghost",
+    onClick: () => set("squad", []),
+    style: {
+      flex: 1,
+      padding: "8px 0",
+      fontSize: 13
+    }
+  }, "Nessuno")), /*#__PURE__*/React.createElement(SquadPicker, {
+    roster: roster,
+    squad: t.squad,
+    setSquad: s => set("squad", s)
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 13,
+      marginBottom: 12
+    }
+  }, "Le partite le aggiungi dopo, anche durante la giornata."), /*#__PURE__*/React.createElement(Btn, {
+    tone: "solid",
+    disabled: !t.squad.length || !t.nome.trim(),
+    onClick: () => onSave({
+      ...t,
+      nome: t.nome.trim()
+    }),
+    style: {
+      width: "100%",
+      padding: "16px 0"
+    }
+  }, initial ? "Salva le modifiche" : "Crea il torneo")));
+}
+
+/* ---------------- partite del torneo ---------------- */
+
+function SchedaPartita({
+  torneo,
+  iniziale,
+  onSalva,
+  onElimina,
+  onClose
+}) {
+  const [m, setM] = useState(iniziale || {
+    opponent: "",
+    fase: "",
+    kickoffTime: "",
+    date: torneo.date
+  });
+  const set = (k, v) => setM({
+    ...m,
+    [k]: v
+  });
+  return /*#__PURE__*/React.createElement(Sheet, {
+    onClose: onClose,
+    title: iniziale ? "Modifica partita" : "Aggiungi partita"
+  }, /*#__PURE__*/React.createElement(Field, {
+    label: "Avversario (se non lo sai ancora, lascia vuoto)"
+  }, /*#__PURE__*/React.createElement("input", {
+    style: inp,
+    value: m.opponent,
+    onChange: e => set("opponent", e.target.value),
+    placeholder: "Da definire"
+  })), /*#__PURE__*/React.createElement(Field, {
+    label: "Fase"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex gap2",
+    style: {
+      flexWrap: "wrap",
+      marginBottom: 8
+    }
+  }, FASI.map(f => /*#__PURE__*/React.createElement("button", {
+    key: f,
+    onClick: () => set("fase", m.fase === f ? "" : f),
+    style: {
+      padding: "9px 12px",
+      borderRadius: 999,
+      fontSize: 14,
+      fontWeight: 700,
+      cursor: "pointer",
+      background: m.fase === f ? C.gr : "#fff",
+      color: m.fase === f ? "#fff" : C.dim,
+      border: "1px solid " + (m.fase === f ? C.gr : C.line)
+    }
+  }, f))), /*#__PURE__*/React.createElement("input", {
+    style: inp,
+    value: m.fase,
+    onChange: e => set("fase", e.target.value),
+    placeholder: "oppure scrivila tu"
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "flex gap3"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "f1"
+  }, /*#__PURE__*/React.createElement(Field, {
+    label: "Orario"
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "time",
+    style: inp,
+    value: m.kickoffTime,
+    onChange: e => set("kickoffTime", e.target.value)
+  }))), /*#__PURE__*/React.createElement("div", {
+    className: "f1"
+  }, /*#__PURE__*/React.createElement(Field, {
+    label: "Giorno"
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "date",
+    style: inp,
+    value: m.date,
+    onChange: e => set("date", e.target.value)
+  })))), /*#__PURE__*/React.createElement(Btn, {
+    tone: "solid",
+    onClick: () => onSalva({
+      ...m,
+      opponent: (m.opponent || "").trim(),
+      fase: (m.fase || "").trim()
+    }),
+    style: {
+      width: "100%",
+      padding: "16px 0"
+    }
+  }, iniziale ? "Salva" : "Aggiungi"), onElimina && /*#__PURE__*/React.createElement("div", {
+    className: "mt2"
+  }, /*#__PURE__*/React.createElement(Btn, {
+    tone: "ghost",
+    onClick: onElimina,
+    style: {
+      width: "100%"
+    }
+  }, "Togli questa partita")));
+}
+function AvvioPartitaTorneo({
+  torneo,
+  partita,
+  onVai,
+  onClose
+}) {
+  const [opp, setOpp] = useState((partita.opponent || "").trim());
+  const [periods, setPeriods] = useState(torneo.periodi || partita.periods || 2);
+  const [durata, setDurata] = useState(torneo.durata || 10);
+  return /*#__PURE__*/React.createElement(Sheet, {
+    onClose: onClose,
+    title: "Come si gioca questa partita?"
+  }, /*#__PURE__*/React.createElement(Field, {
+    label: "Avversario"
+  }, /*#__PURE__*/React.createElement("input", {
+    style: inp,
+    value: opp,
+    onChange: e => setOpp(e.target.value),
+    placeholder: "Nome della squadra"
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 14,
+      marginBottom: 8
+    }
+  }, "Numero di tempi"), /*#__PURE__*/React.createElement(Seg, {
+    options: TEMPI_TORNEO.map(n => ({
+      v: n,
+      l: n === 1 ? "1 tempo" : n + " tempi"
+    })),
+    value: periods,
+    onChange: setPeriods
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 14,
+      margin: "18px 0 8px"
+    }
+  }, "Durata di ogni tempo"), /*#__PURE__*/React.createElement(Seg, {
+    options: DURATE_TORNEO.map(n => ({
+      v: n,
+      l: n + "′"
+    })),
+    value: durata,
+    onChange: setDurata
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 13,
+      marginTop: 12
+    }
+  }, "Se non lo sai, chiedilo al mister. Si può cambiare anche dopo."), /*#__PURE__*/React.createElement("div", {
+    className: "mt4"
+  }, /*#__PURE__*/React.createElement(Btn, {
+    tone: "solid",
+    onClick: () => onVai(periods, durata, opp.trim()),
+    style: {
+      width: "100%",
+      padding: "16px 0"
+    }
+  }, "Vai")));
+}
+function SchedaRigori({
+  partita,
+  onSalva,
+  onClose
+}) {
+  const r = partita.rigori || {};
+  const [noi, setNoi] = useState(r.noi == null ? "" : String(r.noi));
+  const [loro, setLoro] = useState(r.loro == null ? "" : String(r.loro));
+  const num = s => String(s).trim() === "" ? null : Math.max(0, parseInt(s, 10) || 0);
+  return /*#__PURE__*/React.createElement(Sheet, {
+    onClose: onClose,
+    title: "Rigori"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 14,
+      marginBottom: 12
+    }
+  }, risultatoTesto({
+    ...partita,
+    opponent: nomeAvv(partita)
+  }), " · scrivi i rigori segnati."), /*#__PURE__*/React.createElement("div", {
+    className: "flex gap3"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "f1"
+  }, /*#__PURE__*/React.createElement(Field, {
+    label: CLUB
+  }, /*#__PURE__*/React.createElement("input", {
+    inputMode: "numeric",
+    style: inp,
+    value: noi,
+    onChange: e => setNoi(e.target.value.replace(/\D/g, ""))
+  }))), /*#__PURE__*/React.createElement("div", {
+    className: "f1"
+  }, /*#__PURE__*/React.createElement(Field, {
+    label: nomeAvv(partita)
+  }, /*#__PURE__*/React.createElement("input", {
+    inputMode: "numeric",
+    style: inp,
+    value: loro,
+    onChange: e => setLoro(e.target.value.replace(/\D/g, ""))
+  })))), /*#__PURE__*/React.createElement(Btn, {
+    tone: "solid",
+    onClick: () => onSalva(num(noi) == null || num(loro) == null ? null : {
+      noi: num(noi),
+      loro: num(loro)
+    }),
+    style: {
+      width: "100%",
+      padding: "16px 0"
+    }
+  }, "Salva"), partita.rigori && /*#__PURE__*/React.createElement("div", {
+    className: "mt2"
+  }, /*#__PURE__*/React.createElement(Btn, {
+    tone: "ghost",
+    onClick: () => onSalva(null),
+    style: {
+      width: "100%"
+    }
+  }, "Togli i rigori")));
+}
+
+/* elenco partite con avvio, aggiunta, rigori: lo usano dirigente e aiutante */
+function TorneoPannello({
+  torneo,
+  partite,
+  puoSegnare,
+  salvaPartita,
+  eliminaPartita,
+  avvia,
+  apriLive,
+  riapri
+}) {
+  const [nuova, setNuova] = useState(false);
+  const [modifica, setModifica] = useState(null);
+  const [avvio, setAvvio] = useState(null);
+  const [rigori, setRigori] = useState(null);
+  const [togli, setTogli] = useState(null);
+  const live = partite.find(m => m.status === "live");
+  const prossima = !live ? partite.find(m => m.status === "convocata") : null;
+  const aggiungi = d => {
+    salvaPartita({
+      id: uid(),
+      torneoId: torneo.id,
+      creato: Date.now(),
+      type: "torneo",
+      tournament: torneo.nome,
+      date: d.date || torneo.date,
+      opponent: d.opponent,
+      fase: d.fase,
+      kickoffTime: d.kickoffTime,
+      home: !!torneo.home,
+      address: torneo.address || "",
+      meetTime: "",
+      notes: "",
+      periods: torneo.periodi || 2,
+      durata: torneo.durata || 10,
+      cur: 1,
+      squad: [...(torneo.squad || [])],
+      lineup: {},
+      goals: [],
+      status: "convocata"
+    });
+    setNuova(false);
+  };
+  return /*#__PURE__*/React.createElement(React.Fragment, null, live && /*#__PURE__*/React.createElement(Btn, {
+    tone: "solid",
+    onClick: () => apriLive(live.id),
+    style: {
+      width: "100%",
+      padding: "18px 0",
+      fontSize: 18,
+      fontWeight: 800,
+      marginBottom: 12
+    }
+  }, puoSegnare ? "Torna alla partita" : "Segui la partita", " · ", risultatoTesto({
+    ...live,
+    opponent: nomeAvv(live)
+  })), puoSegnare && prossima && /*#__PURE__*/React.createElement(Btn, {
+    tone: "solid",
+    onClick: () => setAvvio(prossima),
+    style: {
+      width: "100%",
+      padding: "18px 0",
+      fontSize: 18,
+      fontWeight: 800,
+      marginBottom: 12
+    }
+  }, "Inizia: ", prossima.fase ? prossima.fase + " vs " : "vs ", nomeAvv(prossima)), /*#__PURE__*/React.createElement("div", {
+    className: "flex ic jb",
+    style: {
+      margin: "6px 0 8px"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 16,
+      fontWeight: 800
+    }
+  }, "Partite", partite.length ? " (" + partite.length + ")" : ""), puoSegnare && torneo.status !== "chiuso" && /*#__PURE__*/React.createElement("button", {
+    onClick: () => setNuova(true),
+    style: {
+      background: "none",
+      border: "none",
+      color: C.gr,
+      fontWeight: 800,
+      fontSize: 15,
+      minHeight: 44,
+      padding: "0 4px",
+      cursor: "pointer"
+    }
+  }, "+ Aggiungi partita")), !partite.length && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 15,
+      background: C.sur,
+      border: "1px dashed " + C.line,
+      borderRadius: 12,
+      padding: 14
+    }
+  }, "Nessuna partita ancora. ", puoSegnare ? "Aggiungi quelle che conosci: le altre (incroci, finali) le aggiungi durante la giornata." : "Il dirigente le aggiunge appena le conosce."), partite.map(m => {
+    const o = m.status === "done" ? outcome(m) : null;
+    const col = o === "V" ? C.gr : o === "P" ? C.dim : o === "N" ? C.warn : C.line;
+    const pari = m.status === "done" && o === "N";
+    return /*#__PURE__*/React.createElement("div", {
+      key: m.id,
+      style: {
+        background: m.status === "live" ? C.tint : C.sur,
+        border: "1px solid " + (m.status === "live" ? C.gr : C.line),
+        borderLeft: "3px solid " + (m.status === "live" ? C.gr : col),
+        borderRadius: 12,
+        padding: 12,
+        marginBottom: 8
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "flex ic jb gap2"
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        minWidth: 0
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 13,
+        color: C.dim
+      }
+    }, [m.date && m.date !== torneo.date ? fmtDate(m.date) : null, m.kickoffTime || null, m.fase || null].filter(Boolean).join(" · ") || "Orario da definire"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 16,
+        fontWeight: 700,
+        marginTop: 2
+      }
+    }, m.status === "convocata" ? "vs " + nomeAvv(m) : risultatoPartitaTorneo(m))), m.status === "live" && /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: C.gr,
+        fontSize: 12,
+        fontWeight: 800,
+        whiteSpace: "nowrap"
+      }
+    }, "in corso")), puoSegnare && /*#__PURE__*/React.createElement("div", {
+      className: "flex gap2 mt2"
+    }, m.status === "convocata" && /*#__PURE__*/React.createElement(Btn, {
+      tone: "solid",
+      onClick: () => setAvvio(m),
+      style: {
+        flex: 1,
+        padding: "10px 0",
+        fontSize: 14
+      }
+    }, "Inizia"), m.status === "convocata" && /*#__PURE__*/React.createElement(Btn, {
+      onClick: () => setModifica(m),
+      style: {
+        flex: 1,
+        padding: "10px 0",
+        fontSize: 14
+      }
+    }, "Modifica"), m.status === "live" && /*#__PURE__*/React.createElement(Btn, {
+      tone: "solid",
+      onClick: () => apriLive(m.id),
+      style: {
+        flex: 1,
+        padding: "10px 0",
+        fontSize: 14
+      }
+    }, "Apri"), pari && /*#__PURE__*/React.createElement(Btn, {
+      onClick: () => setRigori(m),
+      style: {
+        flex: 1,
+        padding: "10px 0",
+        fontSize: 14
+      }
+    }, m.rigori ? "Rigori ✓" : "Rigori"), m.status === "done" && riapri && /*#__PURE__*/React.createElement(Btn, {
+      tone: "ghost",
+      onClick: () => riapri(m.id),
+      style: {
+        flex: 1,
+        padding: "10px 0",
+        fontSize: 14
+      }
+    }, "Riapri")));
+  }), nuova && /*#__PURE__*/React.createElement(SchedaPartita, {
+    torneo: torneo,
+    onSalva: aggiungi,
+    onClose: () => setNuova(false)
+  }), modifica && /*#__PURE__*/React.createElement(SchedaPartita, {
+    torneo: torneo,
+    iniziale: {
+      opponent: modifica.opponent || "",
+      fase: modifica.fase || "",
+      kickoffTime: modifica.kickoffTime || "",
+      date: modifica.date || torneo.date
+    },
+    onClose: () => setModifica(null),
+    onSalva: d => {
+      salvaPartita({
+        ...modifica,
+        ...d
+      });
+      setModifica(null);
+    },
+    onElimina: () => {
+      setTogli(modifica);
+      setModifica(null);
+    }
+  }), avvio && /*#__PURE__*/React.createElement(AvvioPartitaTorneo, {
+    torneo: torneo,
+    partita: avvio,
+    onClose: () => setAvvio(null),
+    onVai: (p, d, opp) => {
+      const id = avvio.id;
+      setAvvio(null);
+      avvia(id, p, d, {
+        opponent: opp
+      });
+    }
+  }), rigori && /*#__PURE__*/React.createElement(SchedaRigori, {
+    partita: rigori,
+    onClose: () => setRigori(null),
+    onSalva: r => {
+      salvaPartita({
+        ...rigori,
+        rigori: r
+      });
+      setRigori(null);
+    }
+  }), togli && /*#__PURE__*/React.createElement(Conferma, {
+    titolo: "Togliere la partita?",
+    testo: "vs " + nomeAvv(togli) + (togli.fase ? " · " + togli.fase : "") + ". Non si può annullare.",
+    si: "Sì, togli",
+    onSi: () => {
+      const id = togli.id;
+      setTogli(null);
+      eliminaPartita(id);
+    },
+    onNo: () => setTogli(null)
+  }));
+}
+
+/* immagine della convocazione del torneo: stesse righe del testo */
+function disegnaTorneo(c, logo, t, partite, players, meteo) {
+  const W = 1080,
+    rows = Math.ceil(players.length / 2);
+  const Hh = 760 + rows * 64 + (t.notes ? 170 : 0) + (t.address ? 46 : 0) + (meteo ? 46 : 0) + (partite.length ? 90 + partite.length * 58 : 0);
+  c.width = W;
+  c.height = Hh;
+  const x = c.getContext("2d");
+  if (!x) return null;
+  const F = (s, w = 400) => `${w} ${s}px Helvetica,Arial,sans-serif`;
+  const scrivi = (testo, px, py, max) => {
+    let s = String(testo);
+    while (s.length > 3 && x.measureText(s).width > max) s = s.slice(0, -2);
+    if (s !== String(testo)) s = s.replace(/\s+$/, "") + "…";
+    x.fillText(s, px, py);
+  };
+  x.fillStyle = "#fff";
+  x.fillRect(0, 0, W, Hh);
+  x.fillStyle = C.gr;
+  x.fillRect(0, 0, W, 18);
+  x.fillRect(0, Hh - 18, W, 18);
+  if (logo) x.drawImage(logo, 70, 70, 150, 162);
+  x.fillStyle = C.gr;
+  x.font = F(48, 800);
+  x.fillText(CLUB, 255, 135);
+  x.fillStyle = C.dim;
+  x.font = F(32, 500);
+  x.fillText("Convocazione torneo · " + CAT, 255, 190);
+  let y = 300;
+  x.strokeStyle = C.line;
+  x.lineWidth = 2;
+  x.beginPath();
+  x.moveTo(70, y);
+  x.lineTo(W - 70, y);
+  x.stroke();
+  y += 78;
+  x.fillStyle = C.gr;
+  x.font = F(58, 800);
+  scrivi(t.nome || "Torneo", 70, y, W - 140);
+  y += 56;
+  x.fillStyle = C.txt;
+  x.font = F(34, 500);
+  x.fillText(cap(fmtLong(t.date)), 70, y);
+  y += 50;
+  x.fillStyle = C.dim;
+  x.font = F(32, 500);
+  x.fillText(t.home ? "In casa" : "Fuori casa", 70, y);
+  if (t.address) {
+    y += 46;
+    x.fillStyle = C.txt;
+    scrivi(t.address, 70, y, W - 140);
+  }
+  if (meteo) {
+    y += 46;
+    x.fillStyle = C.txt;
+    adatta(x, meteoRiga(meteo), W - 140, 30, 500);
+    x.fillText(meteoRiga(meteo), 70, y);
+    x.font = F(32, 500);
+  }
+  y += 44;
+  x.fillStyle = C.tint;
+  x.fillRect(70, y, 940, 110);
+  x.fillStyle = C.dim;
+  x.font = F(28, 600);
+  x.fillText("Ritrovo", 100, y + 66);
+  x.fillStyle = C.gr;
+  x.font = F(50, 800);
+  x.fillText(t.meetTime || "—", 300, y + 72);
+  y += 170;
+  if (partite.length) {
+    x.fillStyle = C.dim;
+    x.font = F(30, 600);
+    x.fillText("Partite (" + partite.length + ")", 70, y);
+    y += 56;
+    x.font = F(34, 600);
+    partite.forEach(m => {
+      x.fillStyle = C.txt;
+      scrivi("• " + (m.date && m.date !== t.date ? fmtDate(m.date) + " · " : "") + rigaPartita(m), 70, y, W - 140);
+      y += 58;
+    });
+    y += 34;
+  }
+  x.fillStyle = C.dim;
+  x.font = F(30, 600);
+  x.fillText(`Convocati (${players.length})`, 70, y);
+  y += 54;
+  x.font = F(34, 600);
+  players.forEach((p, i) => {
+    x.fillStyle = C.txt;
+    scrivi("• " + p.name, 70 + i % 2 * 490, y + Math.floor(i / 2) * 64, 460);
+  });
+  y += rows * 64 + 20;
+  if (t.notes) {
+    x.fillStyle = C.dim;
+    x.font = F(28, 600);
+    x.fillText("Da portare", 70, y + 26);
+    x.fillStyle = C.txt;
+    x.font = F(32, 500);
+    let line = "",
+      ly = y + 76;
+    for (const w of t.notes.split(" ")) {
+      if (x.measureText(line + w).width > W - 140) {
+        x.fillText(line, 70, ly);
+        line = w + " ";
+        ly += 42;
+      } else line += w + " ";
+    }
+    x.fillText(line, 70, ly);
+  }
+  try {
+    return c.toDataURL("image/png");
+  } catch (e) {
+    return null;
+  }
+}
+
+/* ---------------- dettaglio del torneo ---------------- */
+
+function TorneoDetail({
+  torneo,
+  matches,
+  roster,
+  admin,
+  puoSegnare,
+  onBack,
+  onEdit,
+  onDelete,
+  onChiudi,
+  onRiapri,
+  salvaPartita,
+  eliminaPartita,
+  avvia,
+  apriLive,
+  openRel,
+  riapriPartita
+}) {
+  const partite = partiteDi(torneo, matches);
+  const players = roster.filter(p => (torneo.squad || []).includes(p.id));
+  const meteo = useMeteo(torneo.address, torneo.date, torneo.meetTime);
+  const testo = testoTorneo(torneo, partite, roster, meteo);
+  const [bacheca, setBacheca] = useState(false);
+  const [img, setImg] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [chiudi, setChiudi] = useState(false);
+  const [elimina, setElimina] = useState(false);
+  const [pos, setPos] = useState(torneo.posizione || "");
+  const [nota, setNota] = useState(torneo.nota || "");
+  const cv = useRef(null);
+  const b = bilancioTorneo(partite);
+  const firma = JSON.stringify([meteoRiga(meteo), torneo.nome, torneo.date, torneo.home, torneo.address, torneo.meetTime, torneo.notes, torneo.squad, partite.map(m => [m.date, m.kickoffTime, m.fase, m.opponent]), roster.length]);
+  useEffect(() => {
+    const im = new Image();
+    im.onload = () => {
+      const u = cv.current && disegnaTorneo(cv.current, im, torneo, partite, players, meteo);
+      if (u) setImg(u);
+    };
+    im.onerror = () => {};
+    im.src = LOGO;
+    const u = cv.current && disegnaTorneo(cv.current, null, torneo, partite, players, meteo);
+    if (u) setImg(u);
+  }, [firma]);
+  const nonGiocate = partite.filter(m => m.status === "convocata");
+  return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Header, {
+    title: torneo.nome || "Torneo",
+    sub: "Torneo · " + fmtDate(torneo.date) + " · " + CLUB + " " + CAT,
+    onBack: onBack
+  }), /*#__PURE__*/React.createElement("div", {
+    className: "px4 py5"
+  }, torneo.status === "chiuso" && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.tint,
+      border: "1px solid " + C.gr,
+      borderRadius: 12,
+      padding: 14,
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 800,
+      fontSize: 17,
+      color: C.gr
+    }
+  }, "🏆 ", torneo.posizione ? torneo.posizione + " posto" : "Torneo chiuso"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14,
+      marginTop: 4
+    }
+  }, bilancioTesto(b)), torneo.nota && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14,
+      color: C.dim,
+      marginTop: 6,
+      whiteSpace: "pre-wrap"
+    }
+  }, torneo.nota), /*#__PURE__*/React.createElement(Btn, {
+    onClick: () => setBacheca(true),
+    style: {
+      width: "100%",
+      padding: "14px 0",
+      marginTop: 12
+    }
+  }, "🏆 Bacheca del torneo"), admin && /*#__PURE__*/React.createElement(Btn, {
+    tone: torneo.relazione ? "quiet" : "solid",
+    onClick: openRel,
+    style: {
+      width: "100%",
+      padding: "14px 0",
+      marginTop: 8
+    }
+  }, torneo.relazione ? "Relazione del torneo ✓" : "Relazione del torneo")), torneo.status !== "chiuso" && b.giocate > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14,
+      color: C.dim,
+      marginBottom: 10
+    }
+  }, "Finora: ", /*#__PURE__*/React.createElement("b", {
+    style: {
+      color: C.txt
+    }
+  }, bilancioTesto(b))), /*#__PURE__*/React.createElement(TorneoPannello, {
+    torneo: torneo,
+    partite: partite,
+    puoSegnare: puoSegnare,
+    salvaPartita: salvaPartita,
+    eliminaPartita: eliminaPartita,
+    avvia: avvia,
+    apriLive: apriLive,
+    riapri: admin && torneo.status !== "chiuso" ? riapriPartita : null
+  }), puoSegnare && torneo.regole && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.sur,
+      border: "1px solid " + C.line,
+      borderRadius: 12,
+      padding: 14,
+      marginTop: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      color: C.dim,
+      marginBottom: 4
+    }
+  }, "Regole e note"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 15,
+      whiteSpace: "pre-wrap",
+      lineHeight: 1.5
+    }
+  }, torneo.regole)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 16,
+      fontWeight: 800,
+      margin: "22px 0 8px"
+    }
+  }, "Convocazione"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.sur,
+      border: "1px solid " + C.line,
+      borderRadius: 14,
+      padding: 16,
+      whiteSpace: "pre-wrap",
+      fontSize: 15,
+      lineHeight: 1.6,
+      wordBreak: "break-word"
+    }
+  }, testo), /*#__PURE__*/React.createElement("div", {
+    className: "grid g2 gap2 mt4 noprint"
+  }, /*#__PURE__*/React.createElement(Btn, {
+    tone: "solid",
+    onClick: () => {
+      try {
+        navigator.clipboard.writeText(testo);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch (e) {}
+    }
+  }, copied ? "Copiato" : "Copia testo"), /*#__PURE__*/React.createElement(Btn, {
+    disabled: !img,
+    onClick: () => condividiPNG(img, `torneo-${torneo.date}.png`, "Convocazione torneo")
+  }, img ? "Invia immagine" : "Preparo l'immagine…")), /*#__PURE__*/React.createElement("div", {
+    className: "mt2 noprint"
+  }, /*#__PURE__*/React.createElement(Btn, {
+    onClick: () => {
+      try {
+        window.open(linkCalendarioTorneo(torneo, partite), "_blank");
+      } catch (e) {}
+    },
+    style: {
+      width: "100%"
+    }
+  }, "📅 Aggiungi al calendario")), /*#__PURE__*/React.createElement("canvas", {
+    ref: cv,
+    style: {
+      width: "100%",
+      marginTop: 12,
+      borderRadius: 14,
+      border: "1px solid " + C.line
+    }
+  }), admin && /*#__PURE__*/React.createElement("div", {
+    className: "mt5"
+  }, torneo.status !== "chiuso" ? /*#__PURE__*/React.createElement(Btn, {
+    onClick: () => {
+      setPos(torneo.posizione || "");
+      setNota(torneo.nota || "");
+      setChiudi(true);
+    },
+    style: {
+      width: "100%",
+      padding: "15px 0",
+      border: "1px solid " + C.gr,
+      color: C.gr
+    }
+  }, "Chiudi il torneo…") : /*#__PURE__*/React.createElement(Btn, {
+    onClick: onRiapri,
+    style: {
+      width: "100%"
+    }
+  }, "Riapri il torneo"), /*#__PURE__*/React.createElement("div", {
+    className: "grid g2 gap2 mt2"
+  }, /*#__PURE__*/React.createElement(Btn, {
+    onClick: onEdit
+  }, "Modifica"), /*#__PURE__*/React.createElement(Btn, {
+    tone: "ghost",
+    onClick: () => setElimina(true)
+  }, "Elimina")))), chiudi && /*#__PURE__*/React.createElement(Sheet, {
+    onClose: () => setChiudi(false),
+    title: "Chiudere il torneo?"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 15,
+      marginBottom: 12
+    }
+  }, bilancioTesto(b), nonGiocate.length ? " · " + nonGiocate.length + (nonGiocate.length === 1 ? " partita non giocata viene tolta." : " partite non giocate vengono tolte.") : ""), /*#__PURE__*/React.createElement(Field, {
+    label: "Posizione finale"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex gap2",
+    style: {
+      flexWrap: "wrap",
+      marginBottom: 8
+    }
+  }, POSIZIONI.map(p => /*#__PURE__*/React.createElement("button", {
+    key: p,
+    onClick: () => setPos(pos === p ? "" : p),
+    style: {
+      minWidth: 48,
+      padding: "9px 12px",
+      borderRadius: 999,
+      fontSize: 15,
+      fontWeight: 800,
+      cursor: "pointer",
+      background: pos === p ? C.gr : "#fff",
+      color: pos === p ? "#fff" : C.dim,
+      border: "1px solid " + (pos === p ? C.gr : C.line)
+    }
+  }, p))), /*#__PURE__*/React.createElement("input", {
+    style: inp,
+    value: pos,
+    onChange: e => setPos(e.target.value),
+    placeholder: "oppure scrivila tu"
+  })), /*#__PURE__*/React.createElement(Field, {
+    label: "Nota (premi, capocannoniere…)"
+  }, /*#__PURE__*/React.createElement("textarea", {
+    style: {
+      ...inp,
+      minHeight: 60
+    },
+    value: nota,
+    onChange: e => setNota(e.target.value)
+  })), /*#__PURE__*/React.createElement(Btn, {
+    tone: "solid",
+    onClick: () => {
+      setChiudi(false);
+      onChiudi(pos.trim(), nota.trim(), nonGiocate.map(m => m.id));
+    },
+    style: {
+      width: "100%",
+      padding: "16px 0"
+    }
+  }, "Sì, chiudi il torneo"), /*#__PURE__*/React.createElement("div", {
+    className: "mt2"
+  }, /*#__PURE__*/React.createElement(Btn, {
+    onClick: () => setChiudi(false),
+    style: {
+      width: "100%"
+    }
+  }, "Annulla"))), bacheca && /*#__PURE__*/React.createElement(BachecaTorneo, {
+    torneo: torneo,
+    partite: partite,
+    roster: roster,
+    onClose: () => setBacheca(false)
+  }), elimina && /*#__PURE__*/React.createElement(Conferma, {
+    titolo: "Eliminare il torneo?",
+    testo: (torneo.nome || "Torneo") + " · " + fmtDate(torneo.date) + ".\nSi perdono anche le sue " + partite.length + " partite, con gol e minuti. Non si può annullare.",
+    si: "Sì, elimina il torneo",
+    onSi: () => {
+      setElimina(false);
+      onDelete();
+    },
+    onNo: () => setElimina(false)
+  }));
+}
+
+/* card del torneo nella scheda Gare */
+function TorneoCard({
+  torneo,
+  partite,
+  onClick
+}) {
+  const live = partite.find(m => m.status === "live");
+  const b = bilancioTorneo(partite);
+  return /*#__PURE__*/React.createElement("button", {
+    onClick: onClick,
+    style: {
+      display: "block",
+      width: "100%",
+      textAlign: "left",
+      background: live ? C.tint : C.sur,
+      border: "1px solid " + (live ? C.gr : C.line),
+      borderLeft: "3px solid " + C.gr,
+      borderRadius: 12,
+      padding: 14,
+      marginBottom: 10,
+      color: C.txt,
+      cursor: "pointer"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex ic jb"
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 16,
+      fontWeight: 700
+    }
+  }, "🏅 ", torneo.nome || "Torneo"), live && /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: C.gr,
+      fontSize: 12,
+      fontWeight: 800
+    }
+  }, "in corso")), live && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.gr,
+      fontSize: 14,
+      fontWeight: 700,
+      marginTop: 4
+    }
+  }, risultatoTesto({
+    ...live,
+    opponent: nomeAvv(live)
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 13,
+      marginTop: 4
+    }
+  }, cap(fmtLong(torneo.date)), " · Torneo"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 13,
+      marginTop: 2
+    }
+  }, torneo.home ? "In casa" : "Fuori casa", torneo.meetTime ? " · ritrovo " + torneo.meetTime : "", " · ", partite.length, " ", partite.length === 1 ? "partita" : "partite", b.giocate ? " · " + bilancioTesto(b) : ""));
+}
+
+/* gruppo del torneo nello Storico */
+function TorneoStorico({
+  torneo,
+  partite,
+  roster,
+  readOnly,
+  apri,
+  openRel
+}) {
+  const [bacheca, setBacheca] = useState(false);
+  const b = bilancioTorneo(partite);
+  const giocate = partite.filter(m => m.status === "done");
+  const sc = {};
+  for (const m of giocate) for (const g of m.goals) if (g.team === "us" && g.playerId) {
+    const n = (roster.find(p => p.id === g.playerId) || {}).name;
+    if (n) sc[n] = (sc[n] || 0) + 1;
+  }
+  const marcatori = Object.keys(sc).sort((a, z) => sc[z] - sc[a] || a.localeCompare(z)).map(n => n + (sc[n] > 1 ? " " + sc[n] : ""));
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.sur,
+      border: "1px solid " + C.line,
+      borderLeft: "3px solid " + C.gr,
+      borderRadius: 12,
+      padding: 14,
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex ic jb gap2"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 16,
+      fontWeight: 700
+    }
+  }, "🏅 ", torneo.nome || "Torneo"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 13,
+      marginTop: 2
+    }
+  }, fmtDate(torneo.date), " · Torneo · ", giocate.length, " ", giocate.length === 1 ? "partita" : "partite")), torneo.posizione && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.gr,
+      fontSize: 18,
+      fontWeight: 800,
+      whiteSpace: "nowrap"
+    }
+  }, torneo.posizione)), !readOnly && torneo.status === "chiuso" && !torneo.relazione && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "inline-block",
+      marginTop: 6,
+      background: "#FFF4D6",
+      color: "#7A5300",
+      fontSize: 12,
+      fontWeight: 800,
+      borderRadius: 999,
+      padding: "3px 10px"
+    }
+  }, "Relazione da compilare"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 8
+    }
+  }, giocate.map(m => /*#__PURE__*/React.createElement("div", {
+    key: m.id,
+    className: "num",
+    style: {
+      fontSize: 14,
+      padding: "4px 0",
+      borderTop: "1px solid " + C.line
+    }
+  }, m.fase ? /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: C.dim
+    }
+  }, m.fase, " · ") : null, risultatoPartitaTorneo(m)))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 13,
+      marginTop: 6
+    }
+  }, bilancioTesto(b), marcatori.length ? " · Gol: " + marcatori.join(", ") : ""), torneo.nota && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 13,
+      marginTop: 4
+    }
+  }, torneo.nota), /*#__PURE__*/React.createElement("div", {
+    className: "flex gap2 mt3"
+  }, /*#__PURE__*/React.createElement(Btn, {
+    tone: "ghost",
+    onClick: apri,
+    style: {
+      flex: 1,
+      padding: "9px 0",
+      fontSize: 13
+    }
+  }, "Apri il torneo"), /*#__PURE__*/React.createElement(Btn, {
+    tone: "ghost",
+    onClick: () => setBacheca(true),
+    style: {
+      flex: 1,
+      padding: "9px 0",
+      fontSize: 13
+    }
+  }, "🏆 Bacheca"), !readOnly && torneo.status === "chiuso" && /*#__PURE__*/React.createElement(Btn, {
+    tone: torneo.relazione ? "quiet" : "ghost",
+    onClick: openRel,
+    style: {
+      flex: 1,
+      padding: "9px 0",
+      fontSize: 13
+    }
+  }, torneo.relazione ? "Relazione ✓" : "Relazione")), bacheca && /*#__PURE__*/React.createElement(BachecaTorneo, {
+    torneo: torneo,
+    partite: partite,
+    roster: roster,
+    onClose: () => setBacheca(false)
+  }));
+}
+
+/* voci dello Storico: gare singole e tornei, dalla piu recente */
+function vociStorico(singole, tornei, matches, filtro) {
+  const voci = singole.map(m => ({
+    m,
+    d: m.date || ""
+  }));
+  if (filtro === "tutte" || filtro === "torneo") {
+    for (const t of tornei || []) {
+      const partite = partiteDi(t, matches);
+      if (t.status === "chiuso" || partite.some(m => m.status === "done")) voci.push({
+        t,
+        partite,
+        d: t.date || ""
+      });
+    }
+  }
+  return voci.sort((a, b) => a.d < b.d ? 1 : a.d > b.d ? -1 : 0);
+}
+
+/* ============================================================
+   Ottobre 2026 (3) — meteo, precedenti, card del risultato,
+   bacheca del torneo. Proposte 1, 2, 3 e 7 approvate l'11/10.
+   ============================================================ */
+
+/* ---------------- meteo (Open-Meteo, gratuito, senza chiave) ---------------- */
+const METEO_CODICI = [[[0], "☀️", "sereno"], [[1, 2], "🌤️", "poco nuvoloso"], [[3], "☁️", "nuvoloso"], [[45, 48], "🌫️", "nebbia"], [[51, 53, 55, 56, 57], "🌦️", "pioviggine"], [[61, 63, 65, 66, 67], "🌧️", "pioggia"], [[71, 73, 75, 77, 85, 86], "🌨️", "neve"], [[80, 81, 82], "🌧️", "rovesci"], [[95, 96, 99], "⛈️", "temporale"]];
+const descriviMeteo = c => {
+  const x = METEO_CODICI.find(r => r[0].includes(c));
+  return x ? {
+    emoji: x[1],
+    testo: x[2]
+  } : {
+    emoji: "🌡️",
+    testo: ""
+  };
+};
+const cittaDa = indirizzo => {
+  const parti = String(indirizzo || "").split(",").map(s => s.trim()).filter(Boolean);
+  const ultima = parti.length > 1 ? parti[parti.length - 1] : parti[0] || "";
+  return ultima.replace(/\b\d{5}\b/g, "").replace(/\(.*?\)/g, "").replace(/\b[A-Z]{2}\b$/, "").trim();
+};
+async function prendiMeteo(indirizzo, data, ora) {
+  const citta = cittaDa(indirizzo);
+  if (!citta || !data) return null;
+  const oggi = oggiISO();
+  const giorni = Math.round((new Date(data + "T12:00:00") - new Date(oggi + "T12:00:00")) / 86400000);
+  if (giorni < 0 || giorni > 15) return null;
+  const chiave = "torinoMP:meteo:" + citta + "|" + data + "|" + (ora || "");
+  try {
+    const c = JSON.parse(localStorage.getItem(chiave) || "null");
+    if (c && Date.now() - c.quando < 3 * 3600000) return c.v;
+  } catch (e) {}
+  const g = await (await fetch("https://geocoding-api.open-meteo.com/v1/search?count=1&language=it&countryCode=IT&name=" + encodeURIComponent(citta))).json();
+  const luogo = g && g.results && g.results[0];
+  if (!luogo) return null;
+  const f = await (await fetch("https://api.open-meteo.com/v1/forecast?latitude=" + luogo.latitude + "&longitude=" + luogo.longitude + "&hourly=temperature_2m,precipitation_probability,weather_code&timezone=Europe%2FRome&start_date=" + data + "&end_date=" + data)).json();
+  const h = f && f.hourly;
+  if (!h || !h.time || !h.time.length) return null;
+  const hh = /^\d{1,2}:\d{2}$/.test(ora || "") ? String(ora).padStart(5, "0").slice(0, 2) : "15";
+  let i = h.time.findIndex(t => t.slice(11, 13) === hh);
+  if (i < 0) i = Math.min(15, h.time.length - 1);
+  const temp = Math.round(h.temperature_2m[i]);
+  const pioggia = h.precipitation_probability ? h.precipitation_probability[i] : null;
+  const d = descriviMeteo(h.weather_code ? h.weather_code[i] : -1);
+  const consigli = [];
+  if (pioggia != null && pioggia >= 40) consigli.push("portate il k-way");
+  if (temp <= 8) consigli.push("vestitevi pesante");
+  if (temp >= 28) consigli.push("acqua in più");
+  const v = {
+    emoji: d.emoji,
+    testo: d.testo,
+    temp,
+    pioggia,
+    citta: luogo.name,
+    ora: hh + ":00",
+    consiglio: consigli.join(", ")
+  };
+  try {
+    localStorage.setItem(chiave, JSON.stringify({
+      quando: Date.now(),
+      v
+    }));
+  } catch (e) {}
+  return v;
+}
+function useMeteo(indirizzo, data, ora) {
+  const [m, setM] = useState(null);
+  useEffect(() => {
+    let vivo = true;
+    setM(null);
+    prendiMeteo(indirizzo, data, ora).then(v => {
+      if (vivo) setM(v);
+    }).catch(() => {});
+    return () => {
+      vivo = false;
+    };
+  }, [indirizzo, data, ora]);
+  return m;
+}
+const meteoRiga = mt => !mt ? "" : "Meteo alle " + mt.ora + ": " + (mt.testo ? mt.testo + ", " : "") + mt.temp + "°" + (mt.pioggia != null ? ", probabilità di pioggia " + mt.pioggia + "%" : "") + (mt.consiglio ? " — " + mt.consiglio : "");
+
+/* ---------------- precedenti con lo stesso avversario ---------------- */
+const normaNome = s => String(s || "").toLowerCase().replace(/[^a-z0-9àèéìòù ]/g, " ").replace(/\b(asd|a s d|ssd|calcio|fc|ac|us|usd|polisportiva|sporting)\b/g, " ").replace(/\s+/g, " ").trim();
+function precedentiDi(matches, m) {
+  const n = normaNome(m && m.opponent);
+  if (!n || n.length < 3) return [];
+  return (matches || []).filter(x => x.id !== m.id && x.status === "done" && x.date && (!m.date || x.date <= m.date)).filter(x => {
+    const k = normaNome(x.opponent);
+    return k && (k === n || Math.min(k.length, n.length) >= 4 && (k.includes(n) || n.includes(k)));
+  }).sort((a, b) => a.date < b.date ? 1 : -1);
+}
+function precedentiRiga(lista) {
+  if (!lista.length) return "";
+  const u = lista[0];
+  const r = rigoriTesto(u);
+  let t = "Ultima sfida: " + risultatoTesto(u) + (r ? " (" + r + ")" : "") + ", " + fmtDate(u.date);
+  if (lista.length > 1) {
+    let v = 0,
+      n = 0,
+      p = 0;
+    for (const x of lista) {
+      const o = outcome(x);
+      if (o === "V") v++;else if (o === "P") p++;else n++;
+    }
+    t += " · in tutto " + v + "V " + n + "N " + p + "P";
+  }
+  return t;
+}
+/* ---------------- immagini condivise ---------------- */
+function testaCard(x, W, logo, sottotitolo) {
+  const F = (s, w = 400) => `${w} ${s}px Helvetica,Arial,sans-serif`;
+  x.fillStyle = "#fff";
+  x.fillRect(0, 0, W, x.canvas.height);
+  x.fillStyle = C.gr;
+  x.fillRect(0, 0, W, 18);
+  x.fillRect(0, x.canvas.height - 18, W, 18);
+  if (logo) x.drawImage(logo, 70, 62, 140, 151);
+  x.fillStyle = C.gr;
+  x.font = F(46, 800);
+  x.fillText(CLUB, 240, 122);
+  x.fillStyle = C.dim;
+  x.font = F(30, 500);
+  x.fillText(sottotitolo, 240, 172);
+  return F;
+}
+function adatta(x, testo, max, dimensione, peso) {
+  let fs = dimensione;
+  x.font = `${peso} ${fs}px Helvetica,Arial,sans-serif`;
+  while (fs > 22 && x.measureText(testo).width > max) {
+    fs -= 2;
+    x.font = `${peso} ${fs}px Helvetica,Arial,sans-serif`;
+  }
+  return fs;
+}
+function aCapo(x, testo, max) {
+  const righe = [];
+  let riga = "";
+  for (const w of String(testo).split(" ")) {
+    if (x.measureText(riga + w).width > max && riga) {
+      righe.push(riga.trim());
+      riga = w + " ";
+    } else riga += w + " ";
+  }
+  if (riga.trim()) righe.push(riga.trim());
+  return righe;
+}
+
+/* card del risultato: stesse informazioni della card nello Storico */
+function marcatoriDi(m, roster) {
+  const sc = {};
+  for (const g of m.goals || []) if (g.team === "us" && g.playerId) {
+    const n = (roster.find(p => p.id === g.playerId) || {}).name;
+    if (n) sc[n] = (sc[n] || 0) + 1;
+  }
+  return Object.keys(sc).map(n => n + (sc[n] > 1 ? " (" + sc[n] + ")" : ""));
+}
+function disegnaCardRisultato(c, logo, m, roster) {
+  const W = 1080,
+    Hh = 1080;
+  c.width = W;
+  c.height = Hh;
+  const x = c.getContext("2d");
+  if (!x) return null;
+  const F = testaCard(x, W, logo, "Risultato finale · " + CAT);
+  const [a, b] = lati({
+    ...m,
+    opponent: (m.opponent || "").trim() || "Avversario"
+  });
+  const o = outcome(m);
+  let y = 300;
+  x.fillStyle = C.dim;
+  x.font = F(30, 600);
+  x.textAlign = "center";
+  x.fillText([typeLabel(m), m.fase || null, cap(fmtLong(m.date))].filter(Boolean).join(" · "), W / 2, y);
+  y += 150;
+  x.fillStyle = C.gr;
+  x.font = F(150, 800);
+  x.fillText(a.gol + "–" + b.gol, W / 2, y);
+  y += 80;
+  const fsA = adatta(x, a.nome, 440, 40, 800);
+  x.fillStyle = a.noi ? C.gr : C.txt;
+  x.font = `${a.noi ? 800 : 600} ${fsA}px Helvetica,Arial,sans-serif`;
+  x.fillText(a.nome, W / 4 + 20, y);
+  const fsB = adatta(x, b.nome, 440, 40, 800);
+  x.fillStyle = b.noi ? C.gr : C.txt;
+  x.font = `${b.noi ? 800 : 600} ${fsB}px Helvetica,Arial,sans-serif`;
+  x.fillText(b.nome, 3 * W / 4 - 20, y);
+  y += 70;
+  const r = rigoriTesto(m);
+  const parz = parzialiTesto(m);
+  x.fillStyle = C.dim;
+  x.font = F(32, 600);
+  if (r) {
+    x.fillText(r, W / 2, y);
+    y += 50;
+  }
+  if (parz) {
+    x.fillText(parz, W / 2, y);
+    y += 50;
+  }
+  const sc = marcatoriDi(m, roster);
+  if (sc.length) {
+    y += 30;
+    x.fillStyle = C.txt;
+    x.font = F(34, 600);
+    for (const riga of aCapo(x, "Gol: " + sc.join(", "), W - 160).slice(0, 4)) {
+      x.fillText(riga, W / 2, y);
+      y += 48;
+    }
+  }
+  x.fillStyle = o === "V" ? C.gr : o === "P" ? C.dim : C.warn;
+  x.font = F(36, 800);
+  x.fillText(o === "V" ? "Vittoria" : o === "P" ? "Sconfitta" : "Pareggio", W / 2, Hh - 70);
+  x.textAlign = "left";
+  try {
+    return c.toDataURL("image/png");
+  } catch (e) {
+    return null;
+  }
+}
+function CardRisultato({
+  match,
+  roster,
+  onClose
+}) {
+  const cv = useRef(null);
+  const [img, setImg] = useState("");
+  useEffect(() => {
+    const u = cv.current && disegnaCardRisultato(cv.current, null, match, roster);
+    if (u) setImg(u);
+    const im = new Image();
+    im.onload = () => {
+      const v = cv.current && disegnaCardRisultato(cv.current, im, match, roster);
+      if (v) setImg(v);
+    };
+    im.src = LOGO;
+  }, [match, roster.length]);
+  return /*#__PURE__*/React.createElement(Sheet, {
+    onClose: onClose,
+    title: "Card del risultato"
+  }, /*#__PURE__*/React.createElement("canvas", {
+    ref: cv,
+    style: {
+      width: "100%",
+      borderRadius: 12,
+      border: "1px solid " + C.line
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 13,
+      margin: "8px 0 12px"
+    }
+  }, "Contiene risultato, parziali e marcatori, come lo Storico."), /*#__PURE__*/React.createElement(Btn, {
+    tone: "solid",
+    disabled: !img,
+    onClick: () => condividiPNG(img, "risultato-" + match.date + ".png", "Risultato"),
+    style: {
+      width: "100%",
+      padding: "15px 0"
+    }
+  }, "Invia immagine"), /*#__PURE__*/React.createElement("div", {
+    className: "mt2"
+  }, /*#__PURE__*/React.createElement(Btn, {
+    onClick: onClose,
+    style: {
+      width: "100%"
+    }
+  }, "Chiudi")));
+}
+
+/* bacheca del torneo, con foto di squadra facoltativa (resta sul telefono, non va sul server) */
+function disegnaBacheca(c, logo, foto, t, partite, roster) {
+  const giocate = partite.filter(m => m.status === "done");
+  const b = bilancioTorneo(giocate);
+  const sc = {};
+  for (const m of giocate) for (const g of m.goals) if (g.team === "us" && g.playerId) {
+    const n = (roster.find(p => p.id === g.playerId) || {}).name;
+    if (n) sc[n] = (sc[n] || 0) + 1;
+  }
+  const marcatori = Object.keys(sc).sort((a, z) => sc[z] - sc[a] || a.localeCompare(z)).map(n => n + (sc[n] > 1 ? " (" + sc[n] + ")" : ""));
+  const W = 1080;
+  const hFoto = foto ? Math.round(Math.min(620, (W - 140) * foto.height / foto.width)) : 0;
+  const Hh = 450 + (hFoto ? hFoto + 40 : 0) + giocate.length * 58 + 120 + (marcatori.length ? 130 : 0) + (t.nota ? 90 : 0);
+  c.width = W;
+  c.height = Hh;
+  const x = c.getContext("2d");
+  if (!x) return null;
+  const F = testaCard(x, W, logo, "Torneo · " + CAT);
+  let y = 300;
+  x.fillStyle = C.gr;
+  adatta(x, t.nome || "Torneo", W - 140, 58, 800);
+  x.fillText(t.nome || "Torneo", 70, y);
+  y += 50;
+  x.fillStyle = C.dim;
+  x.font = F(30, 500);
+  x.fillText(cap(fmtLong(t.date)), 70, y);
+  if (t.posizione) {
+    x.textAlign = "right";
+    x.fillStyle = C.gr;
+    x.font = F(64, 800);
+    x.fillText(t.posizione, W - 70, y - 2);
+    x.font = F(24, 700);
+    x.fillText("POSTO", W - 70, y + 30);
+    x.textAlign = "left";
+  }
+  y += 50;
+  if (foto && hFoto) {
+    const wFoto = Math.round(hFoto * foto.width / foto.height);
+    x.drawImage(foto, (W - wFoto) / 2, y, wFoto, hFoto);
+    y += hFoto + 40;
+  }
+  y += 30;
+  x.font = F(34, 600);
+  for (const m of giocate) {
+    x.fillStyle = C.dim;
+    const fase = m.fase ? m.fase + " · " : "";
+    x.fillText(fase, 70, y);
+    const w = x.measureText(fase).width;
+    x.fillStyle = C.txt;
+    adatta(x, risultatoPartitaTorneo(m), W - 140 - w, 34, 600);
+    x.fillText(risultatoPartitaTorneo(m), 70 + w, y);
+    x.font = F(34, 600);
+    y += 58;
+  }
+  y += 20;
+  x.fillStyle = C.gr;
+  x.font = F(34, 800);
+  x.fillText(bilancioTesto(b), 70, y);
+  y += 60;
+  if (marcatori.length) {
+    x.fillStyle = C.txt;
+    x.font = F(30, 600);
+    for (const riga of aCapo(x, "Gol: " + marcatori.join(", "), W - 140).slice(0, 2)) {
+      x.fillText(riga, 70, y);
+      y += 44;
+    }
+    y += 20;
+  }
+  if (t.nota) {
+    x.fillStyle = C.dim;
+    x.font = F(30, 500);
+    x.fillText(aCapo(x, t.nota, W - 140)[0] || "", 70, y);
+  }
+  try {
+    return c.toDataURL("image/png");
+  } catch (e) {
+    return null;
+  }
+}
+function BachecaTorneo({
+  torneo,
+  partite,
+  roster,
+  onClose
+}) {
+  const cv = useRef(null);
+  const [img, setImg] = useState("");
+  const [foto, setFoto] = useState(null);
+  const [logo, setLogo] = useState(null);
+  useEffect(() => {
+    const im = new Image();
+    im.onload = () => setLogo(im);
+    im.src = LOGO;
+  }, []);
+  useEffect(() => {
+    const u = cv.current && disegnaBacheca(cv.current, logo, foto, torneo, partite, roster);
+    if (u) setImg(u);
+  }, [logo, foto, torneo, partite.length, roster.length]);
+  return /*#__PURE__*/React.createElement(Sheet, {
+    onClose: onClose,
+    title: "Bacheca del torneo"
+  }, /*#__PURE__*/React.createElement("canvas", {
+    ref: cv,
+    style: {
+      width: "100%",
+      borderRadius: 12,
+      border: "1px solid " + C.line
+    }
+  }), /*#__PURE__*/React.createElement("label", {
+    style: {
+      display: "block",
+      marginTop: 12
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: "block",
+      color: C.dim,
+      fontSize: 13,
+      marginBottom: 6
+    }
+  }, "Foto di squadra (facoltativa: resta sul telefono, non va sul server)"), /*#__PURE__*/React.createElement("input", {
+    type: "file",
+    accept: "image/*",
+    style: {
+      fontSize: 14
+    },
+    onChange: e => {
+      const f = e.target.files && e.target.files[0];
+      if (!f) return;
+      const u = URL.createObjectURL(f);
+      const im = new Image();
+      im.onload = () => setFoto(im);
+      im.src = u;
+    }
+  })), foto && /*#__PURE__*/React.createElement("div", {
+    className: "mt2"
+  }, /*#__PURE__*/React.createElement(Btn, {
+    tone: "ghost",
+    onClick: () => setFoto(null),
+    style: {
+      width: "100%"
+    }
+  }, "Togli la foto")), /*#__PURE__*/React.createElement("div", {
+    className: "mt3"
+  }, /*#__PURE__*/React.createElement(Btn, {
+    tone: "solid",
+    disabled: !img,
+    onClick: () => condividiPNG(img, "torneo-" + torneo.date + ".png", torneo.nome || "Torneo"),
+    style: {
+      width: "100%",
+      padding: "15px 0"
+    }
+  }, "Invia immagine")), /*#__PURE__*/React.createElement("div", {
+    className: "mt2"
+  }, /*#__PURE__*/React.createElement(Btn, {
+    onClick: onClose,
+    style: {
+      width: "100%"
+    }
+  }, "Chiudi")));
+}
+
+/* ============================================================
+   Ottobre 2026 — campo per i genitori: chi è in campo, mai i minuti.
+   Le posizioni sono indicative: vengono dal ruolo segnato una volta
+   in rosa, non dalla formazione del mister.
+   ============================================================ */
+const RUOLI = [{
+  v: "P",
+  l: "Portiere"
+}, {
+  v: "D",
+  l: "Difesa"
+}, {
+  v: "C",
+  l: "Centrocampo"
+}, {
+  v: "A",
+  l: "Attacco"
+}];
+const SCHEMI = {
+  0: [0, 0, 0],
+  1: [0, 1, 0],
+  2: [1, 0, 1],
+  3: [1, 1, 1],
+  4: [2, 1, 1],
+  5: [2, 2, 1],
+  6: [2, 3, 1],
+  7: [3, 3, 1],
+  8: [3, 3, 2],
+  9: [3, 4, 2],
+  10: [4, 4, 2],
+  11: [4, 4, 3]
+};
+const iniziali = nome => {
+  const parti = String(nome || "").replace(/\./g, " ").trim().split(/\s+/).filter(Boolean);
+  return ((parti[0] || "?")[0] + (parti[1] ? parti[1][0] : "")).toUpperCase();
+};
+
+/* restituisce [{p, x, y}] con x e y in percentuale; la nostra porta è in basso */
+function disponiInCampo(giocatori) {
+  const portieri = giocatori.filter(g => g.ruolo === "P");
+  const portiere = portieri[0] || null;
+  const fuori = giocatori.filter(g => g !== portiere);
+  const k = fuori.length;
+  const [td, tc, ta] = SCHEMI[k] || [4, k - 7, 3];
+  const linee = {
+    D: [],
+    C: [],
+    A: []
+  };
+  const senza = [];
+  for (const g of fuori) {
+    const r = g.ruolo === "P" ? "D" : g.ruolo;
+    if (r === "D" || r === "C" || r === "A") linee[r].push(g);else senza.push(g);
+  }
+  const obiettivo = {
+    D: td,
+    C: tc,
+    A: ta
+  };
+  for (const g of senza) {
+    let meglio = "C",
+      buco = -99;
+    for (const r of ["C", "D", "A"]) {
+      const d = obiettivo[r] - linee[r].length;
+      if (d > buco) {
+        buco = d;
+        meglio = r;
+      }
+    }
+    linee[buco > 0 ? meglio : "C"].push(g);
+  }
+  const out = [];
+  const riga = (xs, y) => xs.forEach((p, i) => out.push({
+    p,
+    x: 6 + 88 * (i + 1) / (xs.length + 1),
+    y,
+    w: Math.min(30, 88 / (xs.length + 1) + 2)
+  }));
+  riga(linee.A, 17);
+  riga(linee.C, 42);
+  riga(linee.D, 66);
+  if (portiere) out.push({
+    p: portiere,
+    x: 50,
+    y: 88,
+    w: 30
+  });
+  return out;
+}
+function CampoGioco({
+  giocatori,
+  vuoto
+}) {
+  const pos = disponiInCampo(giocatori);
+  const linea = "rgba(255,255,255,.75)";
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "relative",
+      width: "100%",
+      aspectRatio: "4 / 5",
+      borderRadius: 14,
+      overflow: "hidden",
+      background: "repeating-linear-gradient(180deg, #2E7D3A 0, #2E7D3A 10%, #2A7335 10%, #2A7335 20%)"
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    viewBox: "0 0 100 125",
+    preserveAspectRatio: "none",
+    style: {
+      position: "absolute",
+      inset: 0,
+      width: "100%",
+      height: "100%"
+    }
+  }, /*#__PURE__*/React.createElement("g", {
+    fill: "none",
+    stroke: linea,
+    strokeWidth: "0.6"
+  }, /*#__PURE__*/React.createElement("rect", {
+    x: "4",
+    y: "4",
+    width: "92",
+    height: "117"
+  }), /*#__PURE__*/React.createElement("line", {
+    x1: "4",
+    y1: "62.5",
+    x2: "96",
+    y2: "62.5"
+  }), /*#__PURE__*/React.createElement("ellipse", {
+    cx: "50",
+    cy: "62.5",
+    rx: "11",
+    ry: "9"
+  }), /*#__PURE__*/React.createElement("rect", {
+    x: "24",
+    y: "4",
+    width: "52",
+    height: "17"
+  }), /*#__PURE__*/React.createElement("rect", {
+    x: "37",
+    y: "4",
+    width: "26",
+    height: "7"
+  }), /*#__PURE__*/React.createElement("rect", {
+    x: "24",
+    y: "104",
+    width: "52",
+    height: "17"
+  }), /*#__PURE__*/React.createElement("rect", {
+    x: "37",
+    y: "114",
+    width: "26",
+    height: "7"
+  })), /*#__PURE__*/React.createElement("circle", {
+    cx: "50",
+    cy: "62.5",
+    r: "0.9",
+    fill: linea
+  })), !giocatori.length && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      inset: 0,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 24,
+      textAlign: "center",
+      color: "#fff",
+      fontSize: 15,
+      fontWeight: 700,
+      textShadow: "0 1px 3px rgba(0,0,0,.5)"
+    }
+  }, vuoto || "Formazione in arrivo"), pos.map(({
+    p,
+    x,
+    y,
+    w
+  }) => /*#__PURE__*/React.createElement("div", {
+    key: p.id,
+    style: {
+      position: "absolute",
+      left: x + "%",
+      top: y + "%",
+      transform: "translate(-50%, -50%)",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      width: w + "%"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 34,
+      height: 34,
+      borderRadius: 34,
+      background: p.ruolo === "P" && y > 80 ? "#F2C14E" : C.gr,
+      color: p.ruolo === "P" && y > 80 ? C.txt : "#fff",
+      border: "2px solid #fff",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontSize: 12,
+      fontWeight: 800,
+      boxShadow: "0 2px 6px rgba(0,0,0,.3)"
+    }
+  }, iniziali(p.name)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 3,
+      maxWidth: "100%",
+      background: "rgba(20,12,10,.55)",
+      color: "#fff",
+      fontSize: 11.5,
+      fontWeight: 700,
+      borderRadius: 999,
+      padding: "1px 6px",
+      whiteSpace: "nowrap",
+      overflow: "hidden",
+      textOverflow: "ellipsis"
+    }
+  }, p.name))));
+}
+
+/* nella partita dal vivo, per i genitori */
+function CampoLive({
+  match,
+  roster
+}) {
+  const period = match.cur || 1;
+  const squad = roster.filter(p => (match.squad || []).includes(p.id));
+  const giocatori = squad.filter(p => inCampo(match, p.id, period));
+  return /*#__PURE__*/React.createElement("div", {
+    className: "px4 pt5"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 13,
+      marginBottom: 8
+    }
+  }, "In campo ora · ", period, "º tempo"), /*#__PURE__*/React.createElement(CampoGioco, {
+    giocatori: giocatori,
+    vuoto: "Tra un tempo e l'altro: la formazione del " + period + "º tempo compare appena il mister la schiera."
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 12,
+      marginTop: 6
+    }
+  }, "Posizioni indicative. Minuti e cambi restano al dirigente."));
+}
+
+/* in Squadra › Impostazioni: ruoli per il campo e anteprima */
+function RuoliEditor({
+  roster,
+  setRoster
+}) {
+  return /*#__PURE__*/React.createElement("div", null, roster.map(p => /*#__PURE__*/React.createElement("div", {
+    key: p.id,
+    className: "flex ic jb gap2 py2",
+    style: {
+      borderBottom: "1px solid " + C.line
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 15,
+      fontWeight: 600,
+      minWidth: 0,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    }
+  }, p.name), /*#__PURE__*/React.createElement("span", {
+    className: "flex gap1"
+  }, RUOLI.map(r => {
+    const on = p.ruolo === r.v;
+    return /*#__PURE__*/React.createElement("button", {
+      key: r.v,
+      "aria-label": r.l,
+      title: r.l,
+      onClick: () => setRoster(roster.map(z => z.id === p.id ? {
+        ...z,
+        ruolo: on ? undefined : r.v
+      } : z)),
+      style: {
+        width: 40,
+        height: 40,
+        borderRadius: 10,
+        fontSize: 14,
+        fontWeight: 800,
+        cursor: "pointer",
+        background: on ? C.gr : "#fff",
+        color: on ? "#fff" : C.dim,
+        border: "1px solid " + (on ? C.gr : C.line)
+      }
+    }, r.v);
+  })))));
+}
+
+/* ============================================================
+   Ottobre 2026 — notifiche web (Web Push, senza store).
+   Android: basta il browser. iPhone: prima «Aggiungi a schermata Home».
+   Il testo delle notifiche non contiene mai i nomi dei ragazzi.
+   ============================================================ */
+const FN_NOTIFICHE = cloud ? CONFIG.SUPABASE_URL + "/functions/v1/notifiche" : "";
+const PUSHKEY = "torinoMP:push:" + (SQ ? SQ.id : "none");
+const PREF_GENITORI = {
+  inizio: true,
+  gol: true,
+  tempi: false,
+  fine: true
+};
+const VOCI_PREF = [{
+  k: "inizio",
+  l: "Inizio partita"
+}, {
+  k: "gol",
+  l: "Gol, nostri e loro"
+}, {
+  k: "tempi",
+  l: "Fine di ogni tempo"
+}, {
+  k: "fine",
+  l: "Risultato finale"
+}];
+let notificheAssenti = false;
+async function chiamaNotifiche(corpo, keepalive) {
+  if (!FN_NOTIFICHE || notificheAssenti) throw new Error("manca-funzione");
+  const r = await fetch(FN_NOTIFICHE, {
+    method: "POST",
+    headers: H(),
+    body: JSON.stringify(corpo),
+    keepalive: !!keepalive
+  });
+  if (r.status === 404) {
+    notificheAssenti = true;
+    throw new Error("manca-funzione");
+  }
+  let j = {};
+  try {
+    j = await r.json();
+  } catch (e) {}
+  if (!r.ok) throw new Error(j.errore || "errore " + r.status);
+  return j;
+}
+
+/* dopo ogni salvataggio durante una partita: il server confronta e avvisa (mai doppio) */
+function avvisaNotifiche(keepalive) {
+  if (!cloud || !SQ || notificheAssenti) return;
+  chiamaNotifiche({
+    azione: "notifica",
+    squadra: SQ.id
+  }, keepalive).catch(() => {});
+}
+const eIOS = () => {
+  try {
+    return /iPad|iPhone|iPod/.test(navigator.userAgent) || navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
+  } catch (e) {
+    return false;
+  }
+};
+const daHome = () => {
+  try {
+    return navigator.standalone === true || window.matchMedia("(display-mode: standalone)").matches;
+  } catch (e) {
+    return false;
+  }
+};
+function supportoPush() {
+  if (!cloud) return "no-server";
+  const ok = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+  if (ok) return "ok";
+  if (eIOS() && !daHome()) return "ios-home";
+  return "no";
+}
+const leggiPush = () => {
+  try {
+    return JSON.parse(localStorage.getItem(PUSHKEY) || "null");
+  } catch (e) {
+    return null;
+  }
+};
+const scriviPush = v => {
+  try {
+    if (v) localStorage.setItem(PUSHKEY, JSON.stringify(v));else localStorage.removeItem(PUSHKEY);
+  } catch (e) {}
+};
+const b64uInBytes = s => {
+  const p = "=".repeat((4 - s.length % 4) % 4);
+  const b = atob((s + p).replace(/-/g, "+").replace(/_/g, "/"));
+  return Uint8Array.from(b, c => c.charCodeAt(0));
+};
+async function registroSW() {
+  const reg = await navigator.serviceWorker.register("sw.js");
+  if (reg.active) return reg;
+  return await navigator.serviceWorker.ready;
+}
+/* chiave del server e service worker si preparano prima del tocco:
+   su iPhone permesso e iscrizione devono seguire subito il tocco */
+async function preparaPush() {
+  const [{
+    chiave
+  }, reg] = await Promise.all([chiamaNotifiche({
+    azione: "chiave"
+  }), registroSW()]);
+  return {
+    chiave,
+    reg
+  };
+}
+async function attivaPush(squadra, prefs, pronto) {
+  const perm = Notification.permission === "granted" ? "granted" : await Notification.requestPermission();
+  if (perm !== "granted") throw new Error(perm === "denied" ? "permesso-negato" : "permesso-mancante");
+  const {
+    chiave,
+    reg
+  } = pronto || (await preparaPush());
+  let sub = await reg.pushManager.getSubscription();
+  if (sub) {
+    const k = sub.options && sub.options.applicationServerKey;
+    let uguale = false;
+    try {
+      uguale = k && btoa(String.fromCharCode(...new Uint8Array(k))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "") === chiave;
+    } catch (e) {}
+    if (!uguale) {
+      try {
+        await sub.unsubscribe();
+      } catch (e) {}
+      sub = null;
+    }
+  }
+  if (!sub) sub = await reg.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: b64uInBytes(chiave)
+  });
+  const s = sub.toJSON();
+  const url = location.origin + location.pathname + "?squadra=" + encodeURIComponent(squadra);
+  await chiamaNotifiche({
+    azione: "iscrivi",
+    squadra,
+    sub: {
+      endpoint: s.endpoint,
+      keys: s.keys
+    },
+    prefs,
+    url
+  });
+  const v = {
+    endpoint: s.endpoint,
+    prefs,
+    squadra,
+    quando: Date.now()
+  };
+  scriviPush(v);
+  return v;
+}
+async function disattivaPush() {
+  const v = leggiPush();
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    const sub = reg && (await reg.pushManager.getSubscription());
+    if (sub) await sub.unsubscribe();
+  } catch (e) {}
+  if (v && v.endpoint) {
+    try {
+      await chiamaNotifiche({
+        azione: "cancella",
+        endpoint: v.endpoint
+      });
+    } catch (e) {}
+  }
+  scriviPush(null);
+}
+function IstruzioniIPhone() {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 15,
+      lineHeight: 1.65
+    }
+  }, "Su iPhone le notifiche arrivano solo all'app aggiunta alla schermata Home:", /*#__PURE__*/React.createElement("ol", {
+    style: {
+      paddingLeft: 22,
+      margin: "8px 0"
+    }
+  }, /*#__PURE__*/React.createElement("li", null, "tocca ", /*#__PURE__*/React.createElement("b", null, "Condividi"), " (il quadrato con la freccia) in Safari"), /*#__PURE__*/React.createElement("li", null, "scegli ", /*#__PURE__*/React.createElement("b", null, "Aggiungi a schermata Home"), ", poi ", /*#__PURE__*/React.createElement("b", null, "Aggiungi")), /*#__PURE__*/React.createElement("li", null, "apri l'app dall'icona con lo stemma"), /*#__PURE__*/React.createElement("li", null, "torna qui e tocca ", /*#__PURE__*/React.createElement("b", null, "Attiva le notifiche"))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 13
+    }
+  }, "Serve iOS 16.4 o successivo."));
+}
+
+/* scheda completa: stato, scelte, prova, disattiva */
+function NotificheCard({
+  squadra,
+  predefinite
+}) {
+  const sup = supportoPush();
+  const [att, setAtt] = useState(() => leggiPush());
+  const [prefs, setPrefs] = useState(() => (leggiPush() || {}).prefs || predefinite || PREF_GENITORI);
+  const [msg, setMsg] = useState("");
+  const [lavoro, setLavoro] = useState(false);
+  const pronto = useRef(null);
+  useEffect(() => {
+    if (sup !== "ok") return;
+    let vivo = true;
+    preparaPush().then(p => {
+      if (vivo) pronto.current = p;
+    }).catch(e => {
+      if (vivo && e && e.message === "manca-funzione") setMsg(errore(e));
+    });
+    return () => {
+      vivo = false;
+    };
+  }, []);
+  const errore = e => {
+    const m = e && e.message;
+    if (m === "permesso-negato") return "Il telefono ha bloccato le notifiche per questa app: riattivale dalle impostazioni del telefono (Notifiche), poi riprova.";
+    if (m === "permesso-mancante") return "Non hai dato il permesso. Riprova e tocca «Consenti».";
+    if (m === "manca-funzione") return "Le notifiche non sono ancora attive sul server: il dirigente deve completare un passo su Supabase.";
+    if (/fetch|network|Failed/i.test(m || "")) return "Nessuna rete: riprova tra poco.";
+    return "Non riuscito: " + (m || "errore");
+  };
+  const attiva = async () => {
+    setLavoro(true);
+    setMsg("");
+    try {
+      const v = await attivaPush(squadra, prefs, pronto.current);
+      setAtt(v);
+      setMsg("Notifiche attive ✓");
+    } catch (e) {
+      setMsg(errore(e));
+    }
+    setLavoro(false);
+  };
+  const aggiorna = async p => {
+    setPrefs(p);
+    if (!att) return;
+    try {
+      const v = await attivaPush(squadra, p, pronto.current);
+      setAtt(v);
+    } catch (e) {
+      setMsg(errore(e));
+    }
+  };
+  if (sup === "no-server") return null;
+  if (sup === "ios-home") return /*#__PURE__*/React.createElement(IstruzioniIPhone, null);
+  if (sup === "no") return /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 15,
+      color: C.dim
+    }
+  }, "Questo browser non riceve notifiche. Su Android usa Chrome; su iPhone aggiungi l'app alla schermata Home.");
+  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 14,
+      marginBottom: 10,
+      lineHeight: 1.5
+    }
+  }, "Scegli cosa ricevere. Le notifiche dicono solo il punteggio, mai i nomi dei ragazzi."), VOCI_PREF.map(v => /*#__PURE__*/React.createElement("label", {
+    key: v.k,
+    className: "flex ic jb",
+    style: {
+      padding: "10px 0",
+      borderBottom: "1px solid " + C.line,
+      fontSize: 16,
+      cursor: "pointer"
+    }
+  }, /*#__PURE__*/React.createElement("span", null, v.l), /*#__PURE__*/React.createElement("input", {
+    type: "checkbox",
+    checked: !!prefs[v.k],
+    onChange: e => aggiorna({
+      ...prefs,
+      [v.k]: e.target.checked
+    }),
+    style: {
+      width: 22,
+      height: 22,
+      accentColor: C.gr
+    }
+  }))), !att ? /*#__PURE__*/React.createElement(Btn, {
+    tone: "solid",
+    disabled: lavoro,
+    onClick: attiva,
+    style: {
+      width: "100%",
+      padding: "16px 0",
+      marginTop: 14
+    }
+  }, lavoro ? "Attivo…" : "🔔 Attiva le notifiche") : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#E8F3EA",
+      color: "#1E6B34",
+      borderRadius: 12,
+      padding: "10px 14px",
+      fontWeight: 700,
+      fontSize: 15,
+      marginTop: 14
+    }
+  }, "🔔 Notifiche attive su questo telefono"), /*#__PURE__*/React.createElement("div", {
+    className: "grid g2 gap2 mt2"
+  }, /*#__PURE__*/React.createElement(Btn, {
+    onClick: async () => {
+      setMsg("");
+      try {
+        await chiamaNotifiche({
+          azione: "prova",
+          endpoint: att.endpoint
+        });
+        setMsg("Prova inviata: tra qualche secondo dovrebbe arrivare.");
+      } catch (e) {
+        setMsg(errore(e));
+      }
+    }
+  }, "Manda una prova"), /*#__PURE__*/React.createElement(Btn, {
+    tone: "ghost",
+    onClick: async () => {
+      await disattivaPush();
+      setAtt(null);
+      setMsg("Notifiche disattivate.");
+    }
+  }, "Disattiva"))), msg && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.gr,
+      fontSize: 14,
+      marginTop: 10,
+      lineHeight: 1.5
+    }
+  }, msg));
+}
+
+/* invito compatto nella scheda Gare dei genitori */
+function NotificheInvito() {
+  const [aperto, setAperto] = useState(false);
+  const [, agg] = useState(0);
+  const sup = supportoPush();
+  if (sup === "no-server" || sup === "no") return null;
+  const att = leggiPush();
+  return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setAperto(true),
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      width: "100%",
+      textAlign: "left",
+      background: att ? "#fff" : C.tint,
+      border: "1px solid " + (att ? C.line : C.gr),
+      borderRadius: 12,
+      padding: "12px 14px",
+      marginBottom: 16,
+      color: C.txt,
+      cursor: "pointer",
+      fontSize: 15
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 22
+    }
+  }, "🔔"), /*#__PURE__*/React.createElement("span", {
+    className: "f1"
+  }, att ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("b", null, "Notifiche attive"), " · gestisci") : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("b", null, "Ricevi i gol sul telefono"), /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: C.dim,
+      fontSize: 13
+    }
+  }, "Inizio, gol e risultato finale, anche se non sei al campo"))), /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: C.gr,
+      fontWeight: 800
+    }
+  }, "›")), aperto && /*#__PURE__*/React.createElement(Sheet, {
+    onClose: () => {
+      setAperto(false);
+      agg(x => x + 1);
+    },
+    title: "Notifiche della partita"
+  }, /*#__PURE__*/React.createElement(NotificheCard, {
+    squadra: SQ ? SQ.id : ""
+  }), /*#__PURE__*/React.createElement("div", {
+    className: "mt3"
+  }, /*#__PURE__*/React.createElement(Btn, {
+    onClick: () => {
+      setAperto(false);
+      agg(x => x + 1);
+    },
+    style: {
+      width: "100%"
+    }
+  }, "Chiudi"))));
 }
 
 function Btn({
@@ -1960,7 +4533,8 @@ function ConvDetail({
   onStart,
   onDelete,
   readOnly,
-  puoAvviare
+  puoAvviare,
+  tutte
 }) {
   const [copied, setCopied] = useState(false);
   const [img, setImg] = useState("");
@@ -1970,7 +4544,13 @@ function ConvDetail({
   const [durata, setDurata] = useState(match.durata || 15);
   const cv = useRef(null);
   const players = roster.filter(p => match.squad.includes(p.id));
-  const text = buildText(match, roster);
+  const meteo = useMeteo(match.address, match.date, match.kickoffTime || match.meetTime);
+  const prec = precedentiRiga(precedentiDi(tutte || [], match));
+  const mtxt = meteoRiga(meteo);
+  const text = buildText(match, roster, {
+    meteo,
+    prec
+  });
   useEffect(() => {
     const im = new Image();
     im.onload = () => render(im);
@@ -1982,7 +4562,7 @@ function ConvDetail({
       if (!c) return;
       const W = 1080,
         rows = Math.ceil(players.length / 2);
-      const Hh = 830 + rows * 64 + (match.notes ? 170 : 0) + (match.address ? 46 : 0);
+      const Hh = 830 + rows * 64 + (match.notes ? 170 : 0) + (match.address ? 46 : 0) + (mtxt ? 46 : 0) + (prec ? 46 : 0);
       c.width = W;
       c.height = Hh;
       const x = c.getContext("2d");
@@ -2023,6 +4603,20 @@ function ConvDetail({
         y += 46;
         x.fillStyle = C.txt;
         x.fillText(match.address, 70, y);
+      }
+      if (mtxt) {
+        y += 46;
+        x.fillStyle = C.txt;
+        adatta(x, mtxt, W - 140, 30, 500);
+        x.fillText(mtxt, 70, y);
+        x.font = F(32, 500);
+      }
+      if (prec) {
+        y += 46;
+        x.fillStyle = C.dim;
+        adatta(x, prec, W - 140, 30, 500);
+        x.fillText(prec, 70, y);
+        x.font = F(32, 500);
       }
       y += 44;
       x.fillStyle = C.tint;
@@ -2068,7 +4662,7 @@ function ConvDetail({
         setImg(c.toDataURL("image/png"));
       } catch (e) {}
     }
-  }, [match, roster.length]);
+  }, [match, roster.length, mtxt, prec]);
   const copy = () => {
     try {
       navigator.clipboard.writeText(text);
@@ -2219,7 +4813,9 @@ function LiveMatch({
   readOnly,
   onConvocazione,
   stato,
-  aiutante
+  aiutante,
+  mostraCampo,
+  tutte
 }) {
   const [toast, setToast] = useState(null);
   const [conferma, setConferma] = useState(null);
@@ -2496,8 +5092,8 @@ function LiveMatch({
   })();
   const hard = [],
     soft = [];
-  if (period >= 2 && match.periods >= 3) for (const p of squad) if (!(match.lineup[p.id] || []).includes(1) && !(match.lineup[p.id] || []).includes(2)) hard.push(p.name + ": nessuno dei primi due tempi");
-  if (period >= match.periods) for (const p of squad) {
+  if (period >= 2 && match.periods >= 3 && !match.torneoId) for (const p of squad) if (!(match.lineup[p.id] || []).includes(1) && !(match.lineup[p.id] || []).includes(2)) hard.push(p.name + ": nessuno dei primi due tempi");
+  if (period >= match.periods && !match.torneoId) for (const p of squad) {
     const t = tempiOf(p.id);
     if (t < 2) soft.push(p.name + ": solo " + t + " " + (t === 1 ? "tempo" : "tempi"));
     if (match.periods === 4 && t > 3) hard.push(p.name + ": più di 3 tempi");
@@ -2506,7 +5102,7 @@ function LiveMatch({
     className: "pb6"
   }, /*#__PURE__*/React.createElement(Header, {
     title: match.opponent || "Avversario",
-    sub: typeLabel(match) + " · " + fmtDate(match.date) + " · " + (match.home ? "casa" : "trasferta"),
+    sub: typeLabel(match) + (match.fase ? " · " + match.fase : "") + " · " + fmtDate(match.date) + " · " + (match.home ? "casa" : match.torneoId ? "fuori casa" : "trasferta"),
     onBack: onBack,
     right: onConvocazione && /*#__PURE__*/React.createElement("button", {
       onClick: onConvocazione,
@@ -2581,7 +5177,18 @@ function LiveMatch({
       lineHeight: 1.25,
       wordBreak: "break-word"
     }
-  }, latoDx.nome))), /*#__PURE__*/React.createElement("div", {
+  }, latoDx.nome))), (() => {
+    const pr = precedentiRiga(precedentiDi(tutte || [], match));
+    return pr ? /*#__PURE__*/React.createElement("div", {
+      className: "px4 tc",
+      style: {
+        color: C.dim,
+        fontSize: 13,
+        marginTop: -6,
+        marginBottom: 12
+      }
+    }, "\ud83d\udcca ", pr) : null;
+  })(), /*#__PURE__*/React.createElement("div", {
     className: "px4"
   }, /*#__PURE__*/React.createElement("div", {
     className: "flex ic jb",
@@ -2613,7 +5220,12 @@ function LiveMatch({
       padding: "14px 0",
       fontSize: 16
     }
-  }, corre ? "Pausa" : sec > 0 ? "Riprendi" : "Avvia"))), !readOnly && sec === 0 && !corre && inCampoOra.length === 0 && /*#__PURE__*/React.createElement("div", {
+  }, corre ? "Pausa" : sec > 0 ? "Riprendi" : "Avvia"))), readOnly && mostraCampo && /*#__PURE__*/React.createElement(CampoLive, {
+    match: match,
+    roster: roster
+  }), readOnly && cloud && /*#__PURE__*/React.createElement("div", {
+    className: "px4 pt5"
+  }, /*#__PURE__*/React.createElement(NotificheInvito, null)), !readOnly && sec === 0 && !corre && inCampoOra.length === 0 && /*#__PURE__*/React.createElement("div", {
     className: "px4 mt3"
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -3175,12 +5787,22 @@ function LiveMatch({
 function Gare({
   roster,
   matches,
+  tornei,
   open,
   create,
+  createTorneo,
+  openTorneo,
   readOnly,
   live
 }) {
-  const list = matches.filter(m => m.status !== "done").slice().sort((a, b) => a.date > b.date ? 1 : -1);
+  const list = matches.filter(m => m.status !== "done" && !m.torneoId).slice().sort((a, b) => a.date > b.date ? 1 : -1);
+  const voci = [...list.map(m => ({
+    m,
+    d: m.date || ""
+  })), ...(tornei || []).filter(t => t.status !== "chiuso").map(t => ({
+    t,
+    d: t.date || ""
+  }))].sort((a, b) => a.d > b.d ? 1 : a.d < b.d ? -1 : 0);
   return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Header, {
     title: "Gare",
     sub: CLUB + " · " + CAT
@@ -3194,7 +5816,15 @@ function Gare({
       padding: "16px 0",
       marginBottom: 18
     }
-  }, "Nuova convocazione"), !readOnly && /*#__PURE__*/React.createElement(Compleanni, {
+  }, "Nuova convocazione"), !readOnly && /*#__PURE__*/React.createElement(Btn, {
+    onClick: createTorneo,
+    style: {
+      width: "100%",
+      padding: "14px 0",
+      marginTop: -8,
+      marginBottom: 18
+    }
+  }, "\ud83c\udfc5 Nuovo torneo"), readOnly && cloud && /*#__PURE__*/React.createElement(NotificheInvito, null), !readOnly && /*#__PURE__*/React.createElement(Compleanni, {
     roster: roster || [],
     giorni: 7
   }), readOnly && live && /*#__PURE__*/React.createElement("div", {
@@ -3206,12 +5836,17 @@ function Gare({
       marginBottom: 16,
       fontSize: 14
     }
-  }, "Partita in corso — la pagina si aggiorna da sola ogni 10 secondi."), !list.length && /*#__PURE__*/React.createElement("div", {
+  }, "Partita in corso — la pagina si aggiorna da sola ogni 10 secondi."), !voci.length && /*#__PURE__*/React.createElement("div", {
     style: {
       color: C.dim,
       fontSize: 15
     }
-  }, "Nessuna gara in programma."), list.map(m => /*#__PURE__*/React.createElement("button", {
+  }, "Nessuna gara in programma."), voci.map(v => v.t ? /*#__PURE__*/React.createElement(TorneoCard, {
+    key: "t" + v.t.id,
+    torneo: v.t,
+    partite: partiteDi(v.t, matches),
+    onClick: () => openTorneo(v.t.id)
+  }) : (m => /*#__PURE__*/React.createElement("button", {
     key: m.id,
     onClick: () => open(m.id),
     style: {
@@ -3258,23 +5893,28 @@ function Gare({
       fontSize: 13,
       marginTop: 2
     }
-  }, m.home ? "In casa" : "In trasferta", m.meetTime ? ` · ritrovo ${m.meetTime}` : "", " · ", m.squad.length, " convocati")))));
+  }, m.home ? "In casa" : "In trasferta", m.meetTime ? ` · ritrovo ${m.meetTime}` : "", " · ", m.squad.length, " convocati")))(v.m))));
 }
 
 /* ---------------- storico ---------------- */
 
 function History({
   matches,
+  tornei,
   roster,
   reopen,
   remove,
   readOnly,
   openConv,
-  openRel
+  openRel,
+  openTorneo,
+  openRelTorneo
 }) {
   const [filter, setFilter] = useState("tutte");
   const [chiedi, setChiedi] = useState(null);
-  const list = matches.filter(m => m.status === "done").filter(m => filter === "tutte" || m.type === filter).slice().sort((a, b) => a.date < b.date ? 1 : -1);
+  const [card, setCard] = useState(null);
+  const list = matches.filter(m => m.status === "done" && !m.torneoId).filter(m => filter === "tutte" || m.type === filter).slice().sort((a, b) => a.date < b.date ? 1 : -1);
+  const voci = vociStorico(list, tornei, matches, filter);
   return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Header, {
     title: "Storico",
     sub: CLUB + " · " + CAT
@@ -3298,7 +5938,7 @@ function History({
       textTransform: "capitalize"
     }
   }, f))), !readOnly && (() => {
-    const n = matches.filter(m => m.status === "done" && !m.relazione).length;
+    const n = matches.filter(m => m.status === "done" && !m.relazione && !m.torneoId).length + (tornei || []).filter(t => t.status === "chiuso" && !t.relazione).length;
     return n > 0 ? /*#__PURE__*/React.createElement("div", {
       style: {
         background: "#FFF4D6",
@@ -3310,12 +5950,20 @@ function History({
         marginBottom: 12
       }
     }, n === 1 ? "1 relazione da compilare" : n + " relazioni da compilare") : null;
-  })(), !list.length && /*#__PURE__*/React.createElement("div", {
+  })(), !voci.length && /*#__PURE__*/React.createElement("div", {
     style: {
       color: C.dim,
       fontSize: 15
     }
-  }, "Nessuna partita chiusa finora."), list.map(m => {
+  }, "Nessuna partita chiusa finora."), voci.map(v => v.t ? /*#__PURE__*/React.createElement(TorneoStorico, {
+    key: "t" + v.t.id,
+    torneo: v.t,
+    partite: v.partite,
+    roster: roster,
+    readOnly: readOnly,
+    apri: () => openTorneo(v.t.id),
+    openRel: () => openRelTorneo(v.t.id)
+  }) : (m => {
     const [latoSx, latoDx] = lati(m);
     const o = outcome(m);
     const col = o === "V" ? C.gr : o === "P" ? C.dim : C.warn;
@@ -3405,7 +6053,19 @@ function History({
         fontSize: 13,
         marginTop: 8
       }
-    }, "Gol: ", sc.join(", ")), !readOnly && /*#__PURE__*/React.createElement("div", {
+    }, "Gol: ", sc.join(", ")), /*#__PURE__*/React.createElement("button", {
+      onClick: () => setCard(m),
+      style: {
+        background: "none",
+        border: "none",
+        color: C.gr,
+        fontWeight: 700,
+        fontSize: 14,
+        minHeight: 40,
+        padding: "4px 0 0",
+        cursor: "pointer"
+      }
+    }, "\ud83d\uddbc Card del risultato"), !readOnly && /*#__PURE__*/React.createElement("div", {
       className: "flex gap2 mt3"
     }, /*#__PURE__*/React.createElement(Btn, {
       tone: "ghost",
@@ -3440,7 +6100,11 @@ function History({
         fontSize: 13
       }
     }, m.relazione ? "Relazione fine gara \u2713" : "Relazione fine gara"));
-  })), chiedi && /*#__PURE__*/React.createElement(Conferma, {
+  })(v.m))), card && /*#__PURE__*/React.createElement(CardRisultato, {
+    match: card,
+    roster: roster,
+    onClose: () => setCard(null)
+  }), chiedi && /*#__PURE__*/React.createElement(Conferma, {
     titolo: "Eliminare la gara?",
     testo: risultatoTesto(chiedi) + " \u00b7 " + fmtDate(chiedi.date) + ".\nSi perdono gol, minuti e relazione. Non si pu\u00f2 annullare.",
     si: "S\u00ec, elimina la gara",
@@ -3457,9 +6121,13 @@ function History({
 
 function Stats({
   roster,
-  matches,
+  matches: tutteLeGare,
   readOnly
 }) {
+  const [comp, setComp] = useState("tutte");
+  const matches = useMemo(() => comp === "tutte" ? tutteLeGare : tutteLeGare.filter(m => (m.type || "campionato") === comp), [tutteLeGare, comp]);
+  const compLabel = comp === "tutte" ? "" : comp === "amichevole" ? "Amichevoli" : comp === "torneo" ? "Tornei" : "Campionato";
+  const tipiPresenti = TYPES.filter(t => tutteLeGare.some(m => m.status === "done" && (m.type || "campionato") === t.id));
   const s = useMemo(() => computeStats(roster, matches), [roster, matches]);
   const [img, setImg] = useState("");
   const [vista, setVista] = useState("stagione");
@@ -3559,7 +6227,7 @@ function Stats({
       x.fillText(CLUB, 245, 118);
       x.fillStyle = C.dim;
       x.font = F(30, 500);
-      x.fillText(vistaGara ? `Ultima gara \u00b7 ${CAT}` : `Statistiche ${CAT} \u00b7 ${s.total} partite`, 245, 170);
+      x.fillText(vistaGara ? `Ultima gara \u00b7 ${CAT}${compLabel ? " \u00b7 " + compLabel : ""}` : `Statistiche ${CAT}${compLabel ? " \u00b7 " + compLabel : ""} \u00b7 ${s.total} partite`, 245, 170);
       x.fillStyle = C.txt;
       {
         const riga1 = vistaGara ? `${risultatoTesto(gara)}   ${fmtDate(gara.date)}` : `${s.v}V  ${s.n}N  ${s.s}P   \u00b7   gol ${s.gf}:${s.gs}`;
@@ -3649,10 +6317,28 @@ function Stats({
   const media = x => s.total ? (x / s.total).toFixed(1).replace(".", ",") : "0";
   return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Header, {
     title: "Statistiche",
-    sub: `${CLUB} · ${CAT} · ${s.total} partite`
+    sub: `${CLUB} · ${CAT}${compLabel ? " · " + compLabel : ""} · ${s.total} partite`
   }), /*#__PURE__*/React.createElement("div", {
     className: "px4 py5"
-  }, /*#__PURE__*/React.createElement("div", {
+  }, (tipiPresenti.length > 1 || comp !== "tutte") && /*#__PURE__*/React.createElement("div", {
+    className: "noprint mb4"
+  }, /*#__PURE__*/React.createElement(Seg, {
+    options: [{
+      v: "tutte",
+      l: "Tutte"
+    }, {
+      v: "campionato",
+      l: "Campion."
+    }, {
+      v: "amichevole",
+      l: "Amichev."
+    }, {
+      v: "torneo",
+      l: "Tornei"
+    }],
+    value: comp,
+    onChange: setComp
+  })), /*#__PURE__*/React.createElement("div", {
     className: "printonly",
     style: {
       marginBottom: 16
@@ -3663,7 +6349,7 @@ function Stats({
       fontWeight: 800,
       color: C.gr
     }
-  }, CLUB, " \u2014 Statistiche ", CAT), /*#__PURE__*/React.createElement("div", {
+  }, CLUB, " \u2014 Statistiche ", CAT, compLabel ? " \u00b7 " + compLabel : ""), /*#__PURE__*/React.createElement("div", {
     style: {
       color: C.dim,
       fontSize: 13
@@ -4234,7 +6920,9 @@ function Team({
   setAdmin,
   stato,
   sincronizza,
-  gara
+  gara,
+  impostazioni,
+  setImpostazioni
 }) {
   const [vista, setVista] = useState("rosa");
   const [name, setName] = useState("");
@@ -4465,7 +7153,52 @@ function Team({
       si: "Sì, disattiva",
       azione: () => nuovoCodice(true)
     })
-  }, "Disattiva codice"))), cloud && SQ && /*#__PURE__*/React.createElement(React.Fragment, null, titoloSez("Annata in uso"), /*#__PURE__*/React.createElement("div", {
+  }, "Disattiva codice"))), admin && /*#__PURE__*/React.createElement(React.Fragment, null, titoloSez("Campo per i genitori"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 14,
+      marginBottom: 12,
+      lineHeight: 1.5
+    }
+  }, "Durante la partita i genitori vedono chi è in campo, disposto su un campo da gioco. Mai i minuti né i cambi. Le posizioni sono indicative: vengono dal ruolo che segni qui sotto."), /*#__PURE__*/React.createElement(Seg, {
+    options: [{
+      v: false,
+      l: "Spento"
+    }, {
+      v: true,
+      l: "Acceso"
+    }],
+    value: !!(impostazioni && impostazioni.mostraCampo),
+    onChange: v => setImpostazioni({
+      ...(impostazioni || {}),
+      mostraCampo: v
+    })
+  }), impostazioni && impostazioni.mostraCampo && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14,
+      fontWeight: 700,
+      margin: "16px 0 4px"
+    }
+  }, "Ruolo di ogni ragazzo"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: C.dim,
+      fontSize: 13,
+      marginBottom: 6
+    }
+  }, "P portiere · D difesa · C centrocampo · A attacco. Senza ruolo, l'app lo mette dove c'è posto."), /*#__PURE__*/React.createElement(RuoliEditor, {
+    roster: roster,
+    setRoster: setRoster
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14,
+      fontWeight: 700,
+      margin: "16px 0 8px"
+    }
+  }, "Anteprima (i primi ", Math.min(9, roster.length), " della rosa)"), /*#__PURE__*/React.createElement(CampoGioco, {
+    giocatori: roster.slice(0, 9)
+  }))), cloud && supportoPush() !== "no-server" && /*#__PURE__*/React.createElement(React.Fragment, null, titoloSez("Notifiche su questo telefono"), /*#__PURE__*/React.createElement(NotificheCard, {
+    squadra: SQ ? SQ.id : ""
+  })), cloud && SQ && /*#__PURE__*/React.createElement(React.Fragment, null, titoloSez("Annata in uso"), /*#__PURE__*/React.createElement("div", {
     style: {
       background: C.sur,
       border: "1px solid " + C.line,
@@ -5033,14 +7766,15 @@ function Relazione({
   roster,
   update,
   onBack,
-  dirigente
+  dirigente,
+  torneoInfo
 }) {
   const r0 = match.relazione || {};
   const oggi = (() => {
     const d = new Date();
     return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
   })();
-  const cambiRegistrati = (match.subs || []).map(c => {
+  const cambiRegistrati = torneoInfo ? torneoInfo.sostituzioni : (match.subs || []).map(c => {
     const n = id => (roster.find(p => p.id === id) || {}).name || "\u2014";
     return n(c.out) + " esce, entra " + n(c.in) + " (" + c.p + "\u00ba, " + mmss(c.sec) + ")";
   }).join("\n");
@@ -5049,7 +7783,7 @@ function Relazione({
     campo: "",
     defib: "SI",
     defibNota: "",
-    andamento: "",
+    andamento: torneoInfo ? torneoInfo.andamento : "",
     sostituzioni: cambiRegistrati,
     infortuni: "",
     panchina: "",
@@ -5085,7 +7819,8 @@ function Relazione({
     campo: match.address || (match.home ? "campo interno" : "campo avversario"),
     gara: match.home ? noi + " vs " + (match.opponent || "Avversario") : (match.opponent || "Avversario") + " vs " + noi,
     tipo: typeLabel(match),
-    risultato: match.home ? us + "-" + them : them + "-" + us
+    risultato: match.home ? us + "-" + them : them + "-" + us,
+    ...(torneoInfo ? torneoInfo.intestazione : {})
   };
   const v = x => x && String(x).trim() ? String(x).trim() : "\u2014";
   const riga = (lab, val) => !lab ? v(val) : /\?$/.test(lab) ? lab + " " + v(val) : lab + ": " + v(val);
@@ -5266,7 +8001,7 @@ function Relazione({
   } : g));
   const togliG = i => set("segnalati", segnalati.filter((_, j) => j !== i));
   const aggiungiG = () => set("segnalati", [...segnalati, {
-    squadra: match.opponent || "",
+    squadra: torneoInfo ? "" : match.opponent || "",
     numero: "",
     nome: ""
   }]);
@@ -5571,6 +8306,7 @@ function App() {
   const ultimoTentativo = useRef(0);
   const ultimaLettura = useRef(Date.now());
   const first = useRef(true);
+  const avvisoTimer = useRef(null);
   const scrittore = () => cloud && !!chiaveAttiva();
   const setPending = n => {
     pendingRef.current = n;
@@ -5632,6 +8368,7 @@ function App() {
       setErrSync("");
       ultimaLettura.current = Date.now();
       setStato("Allineato con il server alle " + ora() + ": " + conta(unito) + ".");
+      programmaAvviso(unito);
     } catch (e) {
       esito = e.message || "errore";
       setErrSync(esito);
@@ -5646,6 +8383,26 @@ function App() {
       }
     }
     return esito;
+  }
+
+  /* notifiche: 10 secondi dopo l'ultimo salvataggio (cosi un gol annullato subito non parte);
+     subito se una partita e appena stata chiusa o se l'app va in secondo piano */
+  function programmaAvviso(d) {
+    if (!cloud || !d) return;
+    const adesso = Date.now();
+    const ms = d.matches || [];
+    if (!ms.some(m => m.status === "live" || m.closedAt && adesso - m.closedAt < 30 * 60000)) return;
+    const appenaChiusa = ms.some(m => m.status === "done" && m.closedAt && adesso - m.closedAt < 20000);
+    clearTimeout(avvisoTimer.current);
+    if (appenaChiusa) {
+      avvisoTimer.current = null;
+      avvisaNotifiche();
+      return;
+    }
+    avvisoTimer.current = setTimeout(() => {
+      avvisoTimer.current = null;
+      avvisaNotifiche();
+    }, 10000);
   }
   async function pull() {
     if (!cloud || !dbRef.current) return;
@@ -5746,7 +8503,15 @@ function App() {
       }
     };
     const vis = () => {
-      if (!document.hidden) riprova();
+      if (document.hidden) {
+        if (avvisoTimer.current) {
+          clearTimeout(avvisoTimer.current);
+          avvisoTimer.current = null;
+          avvisaNotifiche(true);
+        }
+        return;
+      }
+      riprova();
     };
     window.addEventListener("online", riprova);
     document.addEventListener("visibilitychange", vis);
@@ -5762,7 +8527,8 @@ function App() {
     const live = db.matches.find(m => m.status === "live");
     if (live) setScreen({
       name: "live",
-      id: live.id
+      id: live.id,
+      from: live.torneoId || null
     });
   }, [db]);
   async function verificaCodice(codice) {
@@ -5878,14 +8644,96 @@ function App() {
       rosterMod: timbro(cur.rosterMod)
     });
   };
-  const importaBackup = d => {
+  const setImpostazioni = v => {
     const cur = dbRef.current;
-    const adesso = Date.now();
-    const ids = new Set((d.matches || []).map(m => m.id));
+    commit({
+      ...cur,
+      impostazioni: {
+        ...v,
+        mod: timbro(cur.impostazioni && cur.impostazioni.mod)
+      }
+    });
+  };
+  const tornei = db.tornei || [];
+  const findT = id => tornei.find(t => t.id === id);
+  const upsertTorneo = (t, aggiornaPartite) => {
+    const cur = dbRef.current;
+    const lista = cur.tornei || [];
+    const prev = lista.find(x => x.id === t.id);
+    const nt = {
+      ...t,
+      mod: timbro(prev && prev.mod)
+    };
+    let matches = cur.matches;
+    if (aggiornaPartite && prev) {
+      matches = cur.matches.map(m => {
+        if (m.torneoId !== t.id || m.status === "done") return m;
+        const nm = {
+          ...m,
+          tournament: nt.nome,
+          address: nt.address || "",
+          home: !!nt.home
+        };
+        if (m.status === "convocata") nm.squad = [...(nt.squad || [])];
+        if (prev.date && m.date === prev.date) nm.date = nt.date;
+        return uguali(nm, m) ? m : {
+          ...nm,
+          mod: timbro(m.mod)
+        };
+      });
+    }
+    commit({
+      ...cur,
+      matches,
+      tornei: prev ? lista.map(x => x.id === t.id ? nt : x) : [...lista, nt]
+    });
+  };
+  const dropTorneo = id => {
+    const cur = dbRef.current;
+    const prev = (cur.tornei || []).find(x => x.id === id);
+    const deleted = {
+      ...(cur.deleted || {}),
+      [id]: timbro(prev && prev.mod)
+    };
+    for (const m of cur.matches) if (m.torneoId === id) deleted[m.id] = timbro(m.mod);
+    commit({
+      ...cur,
+      tornei: (cur.tornei || []).filter(x => x.id !== id),
+      matches: cur.matches.filter(m => m.torneoId !== id),
+      deleted
+    });
+  };
+  const chiudiTorneo = (id, posizione, nota, daTogliere) => {
+    const cur = dbRef.current;
+    const t = (cur.tornei || []).find(x => x.id === id);
+    if (!t) return;
     const deleted = {
       ...(cur.deleted || {})
     };
-    for (const m of cur.matches) if (!ids.has(m.id)) deleted[m.id] = timbro(m.mod);
+    for (const m of cur.matches) if (daTogliere.includes(m.id)) deleted[m.id] = timbro(m.mod);
+    const nt = {
+      ...t,
+      status: "chiuso",
+      posizione,
+      nota,
+      closedAt: Date.now(),
+      mod: timbro(t.mod)
+    };
+    commit({
+      ...cur,
+      matches: cur.matches.filter(m => !daTogliere.includes(m.id)),
+      deleted,
+      tornei: cur.tornei.map(x => x.id === id ? nt : x)
+    });
+  };
+  const importaBackup = d => {
+    const cur = dbRef.current;
+    const adesso = Date.now();
+    const ids = new Set([...(d.matches || []), ...(d.tornei || [])].map(m => m.id));
+    const deleted = {
+      ...(cur.deleted || {})
+    };
+    for (const m of [...cur.matches, ...(cur.tornei || [])]) if (!ids.has(m.id)) deleted[m.id] = timbro(m.mod);
     for (const id of ids) delete deleted[id];
     commit({
       ...emptyDB,
@@ -5895,13 +8743,24 @@ function App() {
         ...m,
         mod: Math.max(adesso, (m.mod || 0) + 1)
       })),
+      tornei: (d.tornei || []).map(t => ({
+        ...t,
+        mod: Math.max(adesso, (t.mod || 0) + 1)
+      })),
+      impostazioni: d.impostazioni ? {
+        ...d.impostazioni,
+        mod: Math.max(adesso, (cur.impostazioni && cur.impostazioni.mod || 0) + 1)
+      } : cur.impostazioni,
       roster: d.roster || [],
       rosterMod: Math.max(adesso, (cur.rosterMod || 0) + 1, (d.rosterMod || 0) + 1)
     });
   };
-  const avvia = (id, p, d) => {
+  const avvia = (id, p, d, extra) => {
+    const m = find(id);
+    if (!m) return;
     upsert({
-      ...find(id),
+      ...m,
+      ...(extra || {}),
       periods: p,
       durata: d,
       cur: 1,
@@ -5909,9 +8768,18 @@ function App() {
       stints: [],
       status: "live"
     });
+    if (m.torneoId) {
+      const t = findT(m.torneoId);
+      if (t && (t.periodi !== p || t.durata !== d)) upsertTorneo({
+        ...t,
+        periodi: p,
+        durata: d
+      });
+    }
     setScreen({
       name: "live",
-      id
+      id,
+      from: m.torneoId || null
     });
   };
   const chiudi = id => {
@@ -5951,7 +8819,8 @@ function App() {
     });
     setScreen({
       name: "live",
-      id
+      id,
+      from: m.torneoId || null
     });
   };
   const aiutante = operatore && !admin;
@@ -5968,10 +8837,12 @@ function App() {
       corpo = /*#__PURE__*/React.createElement(LiveMatch, {
         match: find(screen.id),
         roster: db.roster,
+        tutte: db.matches,
         update: upsert,
         readOnly: false,
         aiutante: true,
         stato: chip,
+        mostraCampo: false,
         onBack: () => setScreen(null),
         onConvocazione: null,
         finish: () => {
@@ -5982,6 +8853,7 @@ function App() {
     } else {
       corpo = /*#__PURE__*/React.createElement(AiutanteHome, {
         matches: db.matches,
+        tornei: tornei,
         onStart: avvia,
         openLive: id => setScreen({
           name: "live",
@@ -5990,6 +8862,8 @@ function App() {
         riapri: riapri,
         stato: chip,
         pending: pending,
+        salvaPartita: upsert,
+        eliminaPartita: drop,
         esci: () => {
           try {
             localStorage.removeItem(GKEY);
@@ -6028,7 +8902,98 @@ function App() {
     label: "Squadra"
   }];
   let body = null;
-  if (screen && screen.name === "relazione" && find(screen.id) && admin) body = /*#__PURE__*/React.createElement(Relazione, {
+  const mostraCampo = !!(db.impostazioni && db.impostazioni.mostraCampo);
+  if (screen && screen.name === "relazioneTorneo" && findT(screen.id) && admin) {
+    const t = findT(screen.id);
+    const partite = partiteDi(t, db.matches);
+    body = /*#__PURE__*/React.createElement(Relazione, {
+      match: {
+        id: t.id,
+        date: t.date,
+        address: t.address,
+        home: !!t.home,
+        opponent: t.nome || "Torneo",
+        type: "torneo",
+        tournament: t.nome,
+        goals: [],
+        subs: [],
+        relazione: t.relazione
+      },
+      torneoInfo: infoRelazioneTorneo(t, partite, db.roster),
+      roster: db.roster,
+      update: x => upsertTorneo({
+        ...findT(t.id),
+        relazione: x.relazione
+      }),
+      dirigente: (() => {
+        const xs = [...(db.matches || []), ...tornei].filter(x => x.id !== t.id && x.relazione && x.relazione.dirigente && String(x.relazione.dirigente).trim()).sort((p, q) => String(q.date || "").localeCompare(String(p.date || "")));
+        return xs.length ? xs[0].relazione.dirigente : "";
+      })(),
+      onBack: () => setScreen({
+        name: "torneo",
+        id: t.id
+      })
+    });
+  } else if (screen && screen.name === "torneoForm" && admin) body = /*#__PURE__*/React.createElement(TorneoForm, {
+    roster: db.roster,
+    ultima: ultima,
+    initial: screen.id ? findT(screen.id) : null,
+    onBack: () => setScreen(screen.id ? {
+      name: "torneo",
+      id: screen.id
+    } : null),
+    onSave: t => {
+      upsertTorneo(t, true);
+      setScreen({
+        name: "torneo",
+        id: t.id
+      });
+    }
+  });else if (screen && screen.name === "torneo" && findT(screen.id)) body = /*#__PURE__*/React.createElement(TorneoDetail, {
+    torneo: findT(screen.id),
+    matches: db.matches,
+    roster: db.roster,
+    admin: admin,
+    puoSegnare: admin || operatore,
+    onBack: () => {
+      const t = findT(screen.id);
+      setScreen(null);
+      if (t && t.status === "chiuso") setTab("storico");
+    },
+    onEdit: () => setScreen({
+      name: "torneoForm",
+      id: screen.id
+    }),
+    onDelete: () => {
+      dropTorneo(screen.id);
+      setScreen(null);
+    },
+    onChiudi: (pos, nota, togli) => chiudiTorneo(screen.id, pos, nota, togli),
+    onRiapri: () => {
+      const t = findT(screen.id);
+      const {
+        closedAt,
+        ...resto
+      } = t;
+      upsertTorneo({
+        ...resto,
+        status: "aperto"
+      });
+    },
+    salvaPartita: upsert,
+    eliminaPartita: drop,
+    riapriPartita: riapri,
+    avvia: avvia,
+    apriLive: id => setScreen({
+      name: "live",
+      id,
+      from: screen.id
+    }),
+    openRel: () => setScreen({
+      name: "relazioneTorneo",
+      id: screen.id
+    })
+  });else if (screen && screen.name === "relazione" && find(screen.id) && admin) body = /*#__PURE__*/React.createElement(Relazione, {
     match: find(screen.id),
     roster: db.roster,
     update: upsert,
@@ -6058,6 +9023,7 @@ function App() {
   });else if (screen && screen.name === "conv" && find(screen.id)) body = /*#__PURE__*/React.createElement(ConvDetail, {
     match: find(screen.id),
     roster: db.roster,
+    tutte: db.matches,
     readOnly: readOnly,
     puoAvviare: admin || operatore,
     onBack: () => {
@@ -6079,28 +9045,51 @@ function App() {
   });else if (screen && screen.name === "live" && find(screen.id)) body = /*#__PURE__*/React.createElement(LiveMatch, {
     match: find(screen.id),
     roster: db.roster,
+    tutte: db.matches,
     update: upsert,
     readOnly: readOnly && !operatore,
     aiutante: false,
     stato: chip,
-    onBack: () => setScreen(null),
-    onConvocazione: () => setScreen({
+    mostraCampo: mostraCampo,
+    onBack: () => setScreen(screen.from && findT(screen.from) ? {
+      name: "torneo",
+      id: screen.from
+    } : null),
+    onConvocazione: find(screen.id).torneoId ? findT(find(screen.id).torneoId) ? () => setScreen({
+      name: "torneo",
+      id: find(screen.id).torneoId
+    }) : null : () => setScreen({
       name: "conv",
       id: screen.id
     }),
     finish: () => {
+      const tid = find(screen.id).torneoId;
       chiudi(screen.id);
-      setScreen(null);
-      setTab("storico");
+      if (tid && findT(tid)) setScreen({
+        name: "torneo",
+        id: tid
+      });else {
+        setScreen(null);
+        setTab("storico");
+      }
     }
   });else if (tab === "gare") body = /*#__PURE__*/React.createElement(Gare, {
     roster: db.roster,
     matches: db.matches,
+    tornei: tornei,
     readOnly: readOnly,
     live: !!live,
     create: () => setScreen({
       name: "form",
       id: null
+    }),
+    createTorneo: () => setScreen({
+      name: "torneoForm",
+      id: null
+    }),
+    openTorneo: id => setScreen({
+      name: "torneo",
+      id
     }),
     open: id => setScreen({
       name: find(id).status === "live" ? "live" : "conv",
@@ -6108,8 +9097,17 @@ function App() {
     })
   });else if (tab === "storico") body = /*#__PURE__*/React.createElement(History, {
     matches: db.matches,
+    tornei: tornei,
     roster: db.roster,
     readOnly: readOnly,
+    openTorneo: id => setScreen({
+      name: "torneo",
+      id
+    }),
+    openRelTorneo: id => setScreen({
+      name: "relazioneTorneo",
+      id
+    }),
     reopen: id => riapri(id),
     remove: drop,
     openConv: id => setScreen({
@@ -6133,7 +9131,9 @@ function App() {
     setAdmin: setAdmin,
     stato: stato,
     sincronizza: sincronizza,
-    gara: prossimaGara(db.matches)
+    gara: prossimaGara(db.matches),
+    impostazioni: db.impostazioni || null,
+    setImpostazioni: setImpostazioni
   });
   return /*#__PURE__*/React.createElement("div", {
     style: {
