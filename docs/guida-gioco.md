@@ -43,3 +43,12 @@ Conta solo battere il proprio record; i ragazzi non vedono i tempi degli altri.
 Il loro Fighter con la maglia granata, le stelle con la frase del mister, le sfide a casa,
 l'obiettivo della settimana, la fantasquadra, il boss del mese, la bacheca e lo spogliatoio
 con gli avatar dei compagni. Niente chat, niente foto, niente classifica.
+
+Il Fighter si muove e salta se lo toccano; sfide e mosse hanno un disegno che mostra come si
+fanno. Quando arrivano stelle, premi o un nuovo grado, all'apertura compare **Ci sono
+novità!**: toccando **Vediamo!** parte la festa. Un record nelle sfide a casa ha la sua
+schermata. I trofei nuovi volano sulla coppa in alto e il boss trema quando la squadra lo colpisce.
+
+**Suoni**: ci sono solo nell'app dei ragazzi, non in quella del mister e del dirigente. Il
+ragazzo li spegne con l'altoparlante in alto; su iPhone tacciono anche con il tasto
+silenzioso. Il timer delle sfide fischia all'inizio e alla fine.

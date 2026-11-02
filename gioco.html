@@ -241,6 +241,118 @@
   .seg button { flex:1; border:none; border-radius:10px; padding:9px 4px; background:transparent; color:var(--dim); cursor:pointer; font-size:14px; }
   .seg button.on { background:var(--oro); color:var(--ink); }
   .vuoto { text-align:center; padding:12px 6px; color:var(--dim); }
+
+  /* =====================================================================
+     MOVIMENTO (versione 2): il Fighter vive, i trofei contano, le feste
+     ===================================================================== */
+  .testata .suono { flex:none; width:36px; height:36px; border-radius:50%; border:3px solid var(--ink); background:#3a1512; color:var(--gesso);
+                    display:grid; place-items:center; cursor:pointer; padding:0; box-shadow:0 3px 0 var(--ink); }
+  .testata .suono svg { width:19px; height:19px; }
+  .app:not(.senza-tab) .testata { gap:8px; } .app:not(.senza-tab) .testata .dx { gap:6px; } .app:not(.senza-tab) .testata .marchio small { font-size:11.5px; }
+  .testata .suono.off { color:var(--dim); }
+  .testata .suono:active { transform:translateY(2px); box-shadow:0 1px 0 var(--ink); }
+  .pill-trofei.gonfia { animation:gonfia .45s cubic-bezier(.3,1.6,.5,1); }
+  @keyframes gonfia { 40% { transform:scale(1.28); } }
+  .pill-trofei.hud { position:fixed; top:calc(env(safe-area-inset-top) + 10px); right:14px; z-index:65; box-shadow:0 4px 0 rgba(0,0,0,.45); animation:hud .25s ease-out; }
+  @keyframes hud { from { transform:translateY(-40px); opacity:0; } }
+  .vola { position:fixed; left:0; top:0; z-index:80; pointer-events:none; display:flex; align-items:center; gap:4px; white-space:nowrap;
+          font-family:var(--display); font-size:36px; color:var(--oro); text-shadow:2px 2px 0 var(--ink),-2px 2px 0 var(--ink),2px -2px 0 var(--ink),-2px -2px 0 var(--ink),0 4px 0 var(--ink); }
+
+  /* il Fighter respira, sbatte gli occhi e salta quando lo tocchi */
+  .eroe .corpo, .festa .corpo { transform-box:view-box; transform-origin:100px 238px; animation:respira 2.8s ease-in-out infinite; }
+  @keyframes respira { 50% { transform:translateY(-2px) scale(.99,1.025); } }
+  .eroe .occhi-ap, .festa .occhi-ap { transform-box:fill-box; transform-origin:center; animation:ciglia 5.2s infinite; }
+  @keyframes ciglia { 0%,93%,100% { transform:scaleY(1); } 96% { transform:scaleY(.12); } }
+  .figura[data-act] { cursor:pointer; }
+  .figura.salta .corpo { animation:salta .75s cubic-bezier(.3,.7,.4,1); }
+  @keyframes salta { 0% { transform:scale(1.12,.86); } 30% { transform:translateY(-40px) scale(.93,1.09) rotate(-4deg); }
+                     55% { transform:translateY(-46px) rotate(3deg); } 80% { transform:translateY(0) scale(1.1,.9); } 100% { transform:none; } }
+  .figura.salta .ombra { transform-box:fill-box; transform-origin:center; animation:ombra .75s; }
+  @keyframes ombra { 30%,55% { transform:scale(.55); opacity:.5; } }
+
+  /* le schede entrano quando cambi pagina */
+  .app.entra > *:not(.tab):not(.testata) { animation:entra .42s cubic-bezier(.25,1.35,.5,1) both; }
+  .app.entra > :nth-child(3) { animation-delay:.05s; } .app.entra > :nth-child(4) { animation-delay:.1s; }
+  .app.entra > :nth-child(5) { animation-delay:.15s; } .app.entra > :nth-child(6) { animation-delay:.2s; }
+  .app.entra > :nth-child(n+7) { animation-delay:.25s; }
+  @keyframes entra { from { opacity:0; transform:translateY(18px) scale(.97); } }
+  .app.entra .barra i, .app.entra .prog i { animation:riempi .9s .3s cubic-bezier(.3,.8,.3,1) both; }
+  @keyframes riempi { from { width:0; } }
+
+  /* missione compatta */
+  .missione { cursor:pointer; }
+  .missione .grande { font-size:38px; }
+  .missione .bonus { display:inline-flex; align-items:center; gap:6px; background:var(--ink); color:#fff; border-radius:12px; padding:5px 10px 5px 6px; font-size:14.5px; font-weight:800; }
+  .missione .bonus .stella-ico { width:24px; height:24px; }
+  .missione .apri { position:absolute; right:14px; top:14px; width:32px; height:32px; border-radius:50%; background:var(--ink); color:#fff; display:grid; place-items:center; font-family:var(--display); font-size:19px; }
+
+  /* sfide: tre caselle della settimana */
+  .slot { display:flex; gap:7px; }
+  .slot i { width:32px; height:32px; border-radius:50%; border:3px solid var(--ink); background:rgba(0,0,0,.3); display:grid; place-items:center; }
+  .slot i.on { background:var(--oro); box-shadow:inset 0 -3px 0 var(--oro-2); }
+  .slot i svg { width:18px; height:18px; }
+
+  /* disegni di sfide e mosse */
+  .tessera .dis { height:58px; margin:0 0 4px; display:flex; }
+  .tessera .dis svg { height:100%; width:auto; }
+  .tessera.chiusa .dis { filter:grayscale(.7); }
+  /* Personalizza: l'anteprima resta in alto mentre scorri le scelte */
+  .eroe.anteprima-av { position:sticky; top:env(safe-area-inset-top); z-index:3; }
+  .foglio .eroe.anteprima-av { top:-18px; }
+  .eroe.anteprima-av .figura svg { width:150px; }
+  .eroe.anteprima-av .numero { font-size:160px; }
+  .disegno { background:#fff; border:3px solid var(--ink); border-radius:18px; display:grid; place-items:center; padding:8px; margin:0 0 12px; box-shadow:0 4px 0 var(--ink); }
+  .disegno svg { width:100%; max-width:280px; height:auto; display:block; }
+  .disegno.basso svg { max-width:190px; }
+
+  /* barra verso il prossimo premio */
+  .prog { height:20px; background:rgba(0,0,0,.35); border:3px solid var(--ink); border-radius:11px; overflow:hidden; margin:12px 0 4px; }
+  .prog i { display:block; height:100%; background:linear-gradient(#FFE27A,#FFC531); box-shadow:inset 0 -5px 0 rgba(232,155,0,.6); }
+
+  /* boss: galleggia e trema quando lo colpite */
+  .boss { position:relative; }
+  .boss svg { animation:galleggia 3.4s ease-in-out infinite; }
+  @keyframes galleggia { 50% { transform:translateY(-6px); } }
+  .boss svg.colpito { animation:colpito .6s ease-out; }
+  @keyframes colpito { 10% { transform:translateX(-10px) rotate(-4deg); filter:brightness(2.2); } 25% { transform:translateX(9px) rotate(3deg); }
+                       40% { transform:translateX(-6px); filter:brightness(1.4); } 60% { transform:translateX(4px); } }
+  .danno { position:absolute; left:50%; top:30%; z-index:2; pointer-events:none; font-family:var(--display); font-size:42px; color:#FF4F5E;
+           text-shadow:2px 2px 0 var(--ink),-2px 2px 0 var(--ink),2px -2px 0 var(--ink),-2px -2px 0 var(--ink),0 4px 0 var(--ink); animation:danno 1.3s ease-out forwards; }
+  @keyframes danno { 0% { transform:translate(-50%,0) scale(.4); opacity:0; } 18% { transform:translate(-50%,-12px) scale(1.35); opacity:1; }
+                     70% { opacity:1; } 100% { transform:translate(-50%,-70px) scale(1); opacity:0; } }
+
+  /* feste a schermo intero */
+  .festa .scatola { animation:scatola .5s cubic-bezier(.25,1.5,.5,1) both; }
+  @keyframes scatola { from { transform:scale(.6); opacity:0; } }
+  .festa .raggi { position:absolute; inset:0; border-radius:22px; overflow:hidden; pointer-events:none; }
+  .festa .raggi::before { content:""; position:absolute; left:50%; top:34%; width:1000px; height:1000px; margin:-500px 0 0 -500px;
+     background:repeating-conic-gradient(rgba(255,197,49,.2) 0 9deg, rgba(255,197,49,0) 9deg 18deg); animation:gira 16s linear infinite; }
+  @keyframes gira { to { transform:rotate(1turn); } }
+  .festa .scatola > :not(.raggi):not(.coriandoli) { position:relative; }
+  .festa .figura svg { width:170px; height:auto; }
+  .festa .sopra { display:inline-block; font-family:var(--display); font-size:15px; padding:3px 10px; border-radius:9px; background:var(--ink); color:var(--oro); }
+  .festa .titolo-festa { font-size:40px; line-height:1; margin:8px 0 6px; animation:timbro .55s .15s cubic-bezier(.25,1.6,.5,1) both; }
+  @keyframes timbro { from { transform:scale(2.2) rotate(-6deg); opacity:0; } }
+  .festa .gigante { font-family:var(--display); font-size:86px; line-height:1; color:var(--oro); margin:2px 0;
+     text-shadow:3px 3px 0 var(--ink),-3px 3px 0 var(--ink),3px -3px 0 var(--ink),-3px -3px 0 var(--ink),0 6px 0 var(--ink); animation:timbro .55s .35s cubic-bezier(.25,1.6,.5,1) both; }
+  .festa .gigante small { font-size:30px; }
+  .festa .guadagno { display:inline-flex; align-items:center; gap:6px; font-family:var(--display); font-size:24px; color:var(--oro); background:var(--ink); border-radius:14px; padding:6px 14px; margin:4px 0 12px; }
+  .stemma { display:inline-block; font-family:var(--display); font-size:44px; line-height:1; padding:12px 28px; border-radius:18px; border:4px solid var(--ink);
+            color:var(--ink); box-shadow:0 6px 0 var(--ink), inset 0 -6px 0 rgba(0,0,0,.15), inset 0 4px 0 rgba(255,255,255,.4); animation:timbro .6s .3s cubic-bezier(.25,1.6,.5,1) both; }
+  .premi { display:grid; grid-template-columns:repeat(auto-fit,minmax(104px,1fr)); gap:10px; margin:10px 0 8px; }
+  .premio { background:var(--pannello-2); border:3px solid var(--ink); border-radius:16px; padding:10px 6px 8px; box-shadow:0 4px 0 var(--ink); font-size:14px; line-height:1.15; font-weight:800;
+            animation:entra .45s cubic-bezier(.25,1.5,.5,1) both; }
+  .premio:nth-child(2) { animation-delay:.12s; } .premio:nth-child(3) { animation-delay:.24s; } .premio:nth-child(n+4) { animation-delay:.36s; }
+  .premio .ico { height:58px; display:grid; place-items:center; margin:0 0 6px; }
+  .premio .ico svg { height:56px; width:auto; }
+  .premio .tess { width:62px; height:52px; border:3px solid var(--ink); border-radius:12px; }
+  .riassunto { display:flex; flex-wrap:wrap; justify-content:center; gap:8px; margin:12px 0 18px; }
+  .riassunto span { background:var(--pannello-2); border:3px solid var(--ink); border-radius:12px; padding:6px 12px; font-family:var(--display); font-size:19px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .eroe .corpo, .festa .corpo, .occhi-ap, .boss svg, .festa .raggi::before, .app.entra > *, .app.entra .barra i, .app.entra .prog i,
+    .festa .scatola, .festa .titolo-festa, .festa .gigante, .premio, .figura.salta .corpo, .figura.salta .ombra, .pill-trofei.gonfia, .pill-trofei.hud, .stemma, .danno { animation:none !important; }
+  }
 </style>
 </head>
 <body>
@@ -378,7 +490,7 @@ const GRADI = [
 const PELLI = ["#FCE0C8", "#F2C9A5", "#E3AC7E", "#C68A5C", "#9A6440", "#6B4429"];
 const COL_CAPELLI = ["#231A17", "#4A2C1D", "#7A4A2A", "#B8753A", "#E3B24F", "#C4552B", "#EDE3C8"];
 const CAPELLI = [ { k:"corti", nome:"Corti" }, { k:"ciuffo", nome:"Ciuffo" }, { k:"ricci", nome:"Ricci" }, { k:"rasati", nome:"Rasati" }, { k:"cresta", nome:"Cresta" }, { k:"lunghi", nome:"Lunghi" } ];
-const OCCHI = [ { k:"normali", nome:"Sveglio" }, { k:"felici", nome:"Felice" }, { k:"grinta", nome:"Grinta" }, { k:"tranquilli", nome:"Tranquillo" } ];
+const OCCHI = [ { k:"normali", nome:"Sveglio" }, { k:"felici", nome:"Felice" }, { k:"grinta", nome:"Grinta" }, { k:"tranquilli", nome:"Tranquillo" }, { k:"furbo", nome:"Furbo" }, { k:"urlo", nome:"Urlo" } ];
 const KIT = {
   casa:      { nome:"Maglia granata", breve:"Granata",   maglia:"#922F29", trim:"#FFFFFF", pant:"#FFFFFF", calze:"#922F29", num:"#FFFFFF" },
   portiere:  { nome:"Maglia da portiere", breve:"Portiere", maglia:"#FFD23A", trim:"#1E0B0A", pant:"#1E0B0A", calze:"#FFD23A", num:"#1E0B0A", guanti:"#FF8A3D" },
@@ -475,6 +587,93 @@ function bossDelMese(mese, imp) {
 const premioDelMese = (mese, imp) => imp && imp.premi && imp.premi[mese] ? imp.premi[mese] : "";
 const nomeGioco = imp => (imp && imp.nome_gioco) || "NEVER GIVE UP";
 const baseUrl = () => location.origin + location.pathname;
+const riduci = () => { try { return matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) { return false; } };
+
+/* =====================================================================
+   SUONI — generati dal telefono (Web Audio): nessun file da scaricare.
+   Solo per i ragazzi (mai per mister e dirigente). Su iPhone tacciono con
+   il tasto silenzioso. Il ragazzo li spegne con l'altoparlante in alto.
+   ===================================================================== */
+const SUONI = (() => {
+  let ctx = null, uscita = null;
+  const hz = n => 440 * Math.pow(2, (n - 69) / 12);          // nota MIDI → frequenza
+  function catena(c, dest) {                                    // volume generale + limitatore
+    const lim = c.createDynamicsCompressor(); lim.threshold.value = -12; lim.ratio.value = 6;
+    const g = c.createGain(); g.gain.value = .6; g.connect(lim); lim.connect(dest); return g;
+  }
+  function nota(c, o, t, f, dur, { tipo = "square", vol = .3, att = .006, fino = 0, filtro = 3200, vib = null } = {}) {
+    const osc = c.createOscillator(), lp = c.createBiquadFilter(), g = c.createGain();
+    osc.type = tipo; osc.frequency.setValueAtTime(f, t);
+    if (fino) osc.frequency.exponentialRampToValueAtTime(fino, t + dur * .85);
+    if (vib) { const l = c.createOscillator(), lg = c.createGain(); l.frequency.value = vib[0]; lg.gain.value = vib[1]; l.connect(lg); lg.connect(osc.frequency); l.start(t); l.stop(t + dur + .05); }
+    lp.type = "lowpass"; lp.frequency.value = filtro;
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + att); g.gain.exponentialRampToValueAtTime(.0005, t + dur);
+    osc.connect(lp); lp.connect(g); g.connect(o); osc.start(t); osc.stop(t + dur + .03);
+  }
+  function rumore(c, o, t, dur, { vol = .3, da = 1500, a = 300, tipo = "lowpass" } = {}) {
+    const n = Math.max(1, Math.floor(c.sampleRate * dur)), b = c.createBuffer(1, n, c.sampleRate), d = b.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+    const s = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
+    s.buffer = b; f.type = tipo; f.frequency.setValueAtTime(da, t); f.frequency.exponentialRampToValueAtTime(a, t + dur);
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.0005, t + dur);
+    s.connect(f); f.connect(g); g.connect(o); s.start(t);
+  }
+  const brillio = (c, o, t, n) => { const sc = [96, 100, 103, 107, 108, 112]; for (let i = 0; i < n; i++) nota(c, o, t + i * .06, hz(sc[(i * 2) % sc.length]), .3, { tipo:"sine", vol:.07 }); };
+  const accordo = (c, o, t, note, dur, vol) => { note.forEach(n => nota(c, o, t, hz(n), dur, { vol, vib:[5.5, 4], filtro:2600 })); nota(c, o, t, hz(note[0] - 24), dur * .8, { tipo:"triangle", vol:.32 }); };
+  const LIB = {
+    tocco:   (c, o, t) => nota(c, o, t, 660, .09, { tipo:"sine", vol:.3, fino:430 }),
+    pop:     (c, o, t) => nota(c, o, t, 420, .1, { tipo:"sine", vol:.24, fino:980 }),
+    tic:     (c, o, t, i = 0) => nota(c, o, t, hz(81 + (i % 10)), .06, { tipo:"triangle", vol:.3 }),
+    moneta:  (c, o, t) => { nota(c, o, t, hz(83), .08, { vol:.14, filtro:5200 }); nota(c, o, t + .075, hz(88), .42, { vol:.14, filtro:5200 }); },
+    stelle:  (c, o, t) => { [84, 88, 91, 96].forEach((n, i) => nota(c, o, t + i * .07, hz(n), .35, { tipo:"sine", vol:.14 })); brillio(c, o, t + .3, 4); },
+    fanfara: (c, o, t) => {
+      [72, 76, 79, 84].forEach((n, i) => nota(c, o, t + i * .085, hz(n), .16, { vol:.15 }));
+      accordo(c, o, t + .36, [72, 76, 79, 84], 1, .09); rumore(c, o, t + .36, .3, { vol:.12, da:7000, a:2500, tipo:"highpass" }); brillio(c, o, t + .5, 6);
+    },
+    record:  (c, o, t) => {
+      nota(c, o, t, hz(79), .11, { vol:.16 }); nota(c, o, t + .13, hz(79), .11, { vol:.16 });
+      rumore(c, o, t + .27, .35, { vol:.2, da:8000, a:2000, tipo:"highpass" }); rumore(c, o, t + .27, .2, { vol:.4, da:900, a:120 });
+      accordo(c, o, t + .27, [79, 84, 88, 91], 1.15, .085); brillio(c, o, t + .45, 8);
+    },
+    grado:   (c, o, t) => {
+      nota(c, o, t, 180, .5, { tipo:"sawtooth", vol:.07, fino:1300, filtro:2800 });
+      [[72, 76, 79], [77, 81, 84], [79, 83, 86]].forEach((a, i) => accordo(c, o, t + .45 + i * .17, a, .16, .08));
+      rumore(c, o, t + .96, .45, { vol:.2, da:8000, a:1800, tipo:"highpass" }); rumore(c, o, t + .96, .22, { vol:.45, da:900, a:110 });
+      accordo(c, o, t + .96, [84, 88, 91, 96], 1.4, .08); brillio(c, o, t + 1.1, 10);
+    },
+    colpo:   (c, o, t) => { nota(c, o, t, 190, .3, { tipo:"sine", vol:.75, fino:42 }); rumore(c, o, t, .2, { vol:.5, da:2200, a:180 }); nota(c, o, t, 120, .14, { vol:.12, fino:60, filtro:900 }); },
+    boing:   (c, o, t) => nota(c, o, t, 240, .34, { tipo:"triangle", vol:.32, fino:780, vib:[16, 40] }),
+    via:     (c, o, t) => { nota(c, o, t, 2700, .25, { tipo:"sine", vol:.2, vib:[30, 190], filtro:7000 }); rumore(c, o, t, .25, { vol:.05, da:4200, a:3200, tipo:"bandpass" }); },
+    fischio: (c, o, t) => { [0, .3].forEach((d, i) => { nota(c, o, t + d, 2700, i ? .65 : .22, { tipo:"sine", vol:.2, vib:[30, 190], filtro:7000 }); rumore(c, o, t + d, i ? .65 : .22, { vol:.05, da:4200, a:3200, tipo:"bandpass" }); }); },
+    conto:   (c, o, t) => nota(c, o, t, hz(81), .09, { tipo:"triangle", vol:.26 }),
+    errore:  (c, o, t) => { nota(c, o, t, 230, .12, { vol:.12, fino:170, filtro:1200 }); nota(c, o, t + .13, 170, .22, { vol:.12, fino:110, filtro:1000 }); },
+    gg:      (c, o, t) => { nota(c, o, t, hz(88), .12, { tipo:"sine", vol:.2 }); nota(c, o, t + .1, hz(93), .4, { tipo:"sine", vol:.2 }); brillio(c, o, t + .18, 3); },
+    salva:   (c, o, t) => { [76, 79, 84].forEach((n, i) => nota(c, o, t + i * .07, hz(n), i === 2 ? .45 : .12, { vol:.13 })); brillio(c, o, t + .2, 3); }
+  };
+  const acceso = () => lget("ngu:suoni") !== "0";
+  function apri() {
+    if (!ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null;
+      try { ctx = new AC(); uscita = catena(ctx, ctx.destination); } catch (e) { ctx = null; return null; }
+    }
+    if (ctx.state !== "running") { try { ctx.resume(); } catch (e) {} }
+    return ctx;
+  }
+  return {
+    nomi:Object.keys(LIB), acceso,
+    pronto:() => !!ctx && ctx.state === "running",
+    sblocca() { if (acceso()) apri(); },                       // al primo tocco (iPhone e Android lo vogliono)
+    commuta() { lset("ngu:suoni", acceso() ? "0" : null); return acceso(); },
+    suona(nome, arg) {
+      if (!acceso() || !LIB[nome] || typeof S === "undefined" || !(S.modo === "ragazzo" || S.modo === "attesa" || S.modo === "iscrizione")) return;
+      const c = apri(); if (!c) return;
+      try { LIB[nome](c, uscita, c.currentTime + .02, arg); } catch (e) {}
+    },
+    disegna(c, nome) { LIB[nome](c, catena(c, c.destination), .02); }   // per il collaudo: suono su un OfflineAudioContext
+  };
+})();
+["pointerup", "touchend", "keydown"].forEach(t => document.addEventListener(t, () => SUONI.sblocca(), { passive:true, capture:true }));
+const icoSuono = on => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 9.5h3.5l5-4v13l-5-4H3.5z" fill="currentColor"/>${on ? `<path d="M15.5 9a4.5 4.5 0 0 1 0 6M18.2 6.5a8 8 0 0 1 0 11"/>` : `<path d="M16 9.5l5 5M21 9.5l-5 5"/>`}</svg>`;
 
 /* =====================================================================
    SERVER
@@ -534,69 +733,89 @@ function scurisci(hex, f) {
   const c = x => Math.max(0, Math.min(255, Math.round(x * (1 - f))));
   return "#" + [c(r), c(g), c(b)].map(x => x.toString(16).padStart(2, "0")).join("");
 }
+let FID = 0;   // ogni disegno ha i suoi id (ritagli delle ombre)
 function fighterSVG(av, o = {}) {
   const a = { ...AV_BASE, ...(av || {}) };
-  const pelle = PELLI[a.pelle] || PELLI[1];
+  const pelle = PELLI[a.pelle] || PELLI[1], pelleO = scurisci(pelle, .17);
   const cap = COL_CAPELLI[a.colore] || COL_CAPELLI[1];
   const kit = KIT[a.maglia] || KIT.casa;
   const scarpa = (SCARPE[a.scarpe] || SCARPE.nere).c;
   const n = o.numero == null || o.numero === "" ? "" : String(o.numero);
+  const id = "fg" + (++FID);
   const sw = 5, L = `stroke="${INK}" stroke-width="${sw}" stroke-linejoin="round" stroke-linecap="round"`;
+  const OMBRA = "rgba(30,11,10,.2)", LUCE = "rgba(255,255,255,.4)";
+  const lunghe = !!kit.guanti;
+  const magliaD = `M66 106q34-12 68 0l18 12${lunghe ? " l-6 30 -12-4" : " l-8 22 -10-5"} 2 31h-64l2-31${lunghe ? " -12 4 -6-30" : " -10 5 -8-22"}z`;
+  const pantD = "M70 146h60l5 38h-30l-5-14-5 14h-30z";
   const vb = o.busto ? "38 4 124 124" : "0 0 200 250";
   let s = `<svg viewBox="${vb}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Fighter">`;
+  s += `<defs><clipPath id="${id}t"><ellipse cx="100" cy="62" rx="47" ry="45"/></clipPath>` +
+       (o.busto ? "" : `<clipPath id="${id}m"><path d="${magliaD}"/></clipPath><clipPath id="${id}p"><path d="${pantD}"/></clipPath>`) + `</defs>`;
+  if (!o.busto) s += `<ellipse class="ombra" cx="100" cy="241" rx="60" ry="8" fill="rgba(0,0,0,.3)"/>`;
+  s += `<g class="corpo">`;
   if (!o.busto) {
-    s += `<ellipse cx="100" cy="240" rx="56" ry="8" fill="rgba(0,0,0,.3)"/>`;
-    // gambe, calze, scarpe
-    s += `<rect x="77" y="172" width="20" height="34" rx="7" fill="${pelle}" ${L}/><rect x="103" y="172" width="20" height="34" rx="7" fill="${pelle}" ${L}/>`;
-    s += `<path d="M75 194h24v26h-24z" fill="${kit.calze}" ${L}/><path d="M101 194h24v26h-24z" fill="${kit.calze}" ${L}/>`;
+    // gambe, calze, scarpe (la parte destra è in ombra)
+    s += `<rect x="77" y="172" width="20" height="34" rx="7" fill="${pelle}" ${L}/><rect x="103" y="172" width="20" height="34" rx="7" fill="${pelleO}" ${L}/>`;
+    s += `<path d="M75 194h24v26h-24z" fill="${kit.calze}" ${L}/><path d="M101 194h24v26h-24z" fill="${scurisci(kit.calze, .15)}" ${L}/>`;
     if (kit.lacci) s += `<path d="M77 200h20M103 200h20" stroke="#fff" stroke-width="4"/>`;
-    s += `<path d="M64 228q0-12 12-12h20q6 0 6 7v6q0 6-6 6h-26q-6 0-6-7z" fill="${scarpa}" ${L}/>`;
-    s += `<path d="M136 228q0-12-12-12h-20q-6 0-6 7v6q0 6 6 6h26q6 0 6-7z" fill="${scarpa}" ${L}/>`;
-    s += `<path d="M70 233h28M102 233h28" stroke="${INK}" stroke-width="2" stroke-dasharray="3 5"/>`;
-    // pantaloncini
-    s += `<path d="M70 146h60l5 38h-30l-5-14-5 14h-30z" fill="${kit.pant}" ${L}/>`;
-    // braccia e mani
+    const suola = scarpa === "#F7F7F7" ? "#C9C2C0" : "#F7F2EC";
+    s += `<path d="M59 228q0-15 15-15h22q9 0 9 9v7q0 8-8 8h-31q-7 0-7-9z" fill="${scarpa}" ${L}/>`;
+    s += `<path d="M141 228q0-15-15-15h-22q-9 0-9 9v7q0 8 8 8h31q7 0 7-9z" fill="${scurisci(scarpa, .12)}" ${L}/>`;
+    s += `<path d="M61 233h42M97 233h42" stroke="${suola}" stroke-width="3.5"/><path d="M66 238.5v2.5M78 238.5v2.5M90 238.5v2.5M110 238.5v2.5M122 238.5v2.5M134 238.5v2.5" stroke="${INK}" stroke-width="4.5" stroke-linecap="round"/>`;
+    s += `<path d="M67 220q9-4 19-3" fill="none" stroke="${LUCE}" stroke-width="3.5" stroke-linecap="round"/>`;
+    // pantaloncini con ombra a destra
+    s += `<path d="${pantD}" fill="${kit.pant}" ${L}/><g clip-path="url(#${id}p)"><path d="M104 140h40v50h-36z" fill="${OMBRA}"/></g><path d="${pantD}" fill="none" ${L}/>`;
+    // braccia e mani (pugni grossi)
     const guanti = kit.guanti;
-    s += `<path d="M58 132q-8 18-5 34M142 132q8 18 5 34" fill="none" stroke="${INK}" stroke-width="20" stroke-linecap="round"/>`;
-    s += `<path d="M58 132q-8 18-5 34M142 132q8 18 5 34" fill="none" stroke="${pelle}" stroke-width="11" stroke-linecap="round"/>`;
-    if (a.acc === "polsini") s += `<path d="M50 156h10v8h-10zM140 156h10v8h-10z" fill="${kit.maglia === "#F7F2EC" ? "#922F29" : "#fff"}" ${L} stroke-width="3"/>`;
-    s += `<circle cx="53" cy="170" r="${guanti ? 12 : 9}" fill="${guanti || pelle}" ${L}/><circle cx="147" cy="170" r="${guanti ? 12 : 9}" fill="${guanti || pelle}" ${L}/>`;
-    // maglia
-    const lunghe = !!kit.guanti;
-    s += `<path d="M66 106q34-12 68 0l18 12${lunghe ? " l-6 30 -12-4" : " l-8 22 -10-5"} 2 31h-64l2-31${lunghe ? " -12 4 -6-30" : " -10 5 -8-22"}z" fill="${kit.maglia}" ${L}/>`;
+    s += `<path d="M58 132q-9 18-6 34M142 132q9 18 6 34" fill="none" stroke="${INK}" stroke-width="22" stroke-linecap="round"/>`;
+    s += `<path d="M58 132q-9 18-6 34" fill="none" stroke="${pelle}" stroke-width="12.5" stroke-linecap="round"/><path d="M142 132q9 18 6 34" fill="none" stroke="${pelleO}" stroke-width="12.5" stroke-linecap="round"/>`;
+    if (a.acc === "polsini") s += `<path d="M48 155h12v9h-12zM140 155h12v9h-12z" fill="${kit.maglia === "#F7F2EC" ? "#922F29" : "#fff"}" ${L} stroke-width="3"/>`;
+    const r = guanti ? 13.5 : 11;
+    s += `<circle cx="52" cy="171" r="${r}" fill="${guanti || pelle}" ${L}/><circle cx="148" cy="171" r="${r}" fill="${guanti ? scurisci(guanti, .12) : pelleO}" ${L}/>`;
+    s += `<path d="M46 168q5-3 10 0M142 168q5-3 10 0" fill="none" stroke="${INK}" stroke-width="2.5" stroke-linecap="round"/>`;
+    // maglia: luce a sinistra, ombra a destra
+    s += `<path d="${magliaD}" fill="${kit.maglia}" ${L}/>`;
+    s += `<g clip-path="url(#${id}m)"><path d="M113 95h50v100h-58z" fill="${OMBRA}"/><path d="M72 116q12-7 24-8" fill="none" stroke="${LUCE}" stroke-width="5" stroke-linecap="round"/></g>`;
+    s += `<path d="${magliaD}" fill="none" ${L}/>`;
     s += lunghe ? `<path d="M140 146l12 4M60 146l-12 4" stroke="${kit.trim}" stroke-width="4"/>` : `<path d="M142 136l10 5M58 136l-10 5" stroke="${kit.trim}" stroke-width="5" stroke-linecap="round"/>`;
     if (kit.banda) s += `<path d="M70 112l60 40" stroke="${kit.trim}" stroke-width="7" opacity=".9"/>`;
     s += `<path d="M86 105l14 13 14-13" fill="none" stroke="${kit.trim}" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>`;
     if (kit.lacci) s += `<path d="M96 112l8 3M96 117l8-3" stroke="${kit.trim}" stroke-width="2.5"/>`;
-    if (n) s += `<text x="100" y="150" text-anchor="middle" font-family="Lilita One, Arial Rounded MT Bold, sans-serif" font-size="27" fill="${kit.num}" stroke="${INK}" stroke-width="3.5" paint-order="stroke">${esc(n)}</text>`;
+    if (n) s += `<text x="100" y="151" text-anchor="middle" font-family="Lilita One, Arial Rounded MT Bold, sans-serif" font-size="29" fill="${kit.num}" stroke="${INK}" stroke-width="4" paint-order="stroke">${esc(n)}</text>`;
   }
-  // collo, orecchie, testa
-  s += `<rect x="89" y="94" width="22" height="16" rx="5" fill="${scurisci(pelle, .08)}" ${L}/>`;
-  s += `<circle cx="54" cy="68" r="10" fill="${pelle}" ${L}/><circle cx="146" cy="68" r="10" fill="${pelle}" ${L}/>`;
-  s += `<ellipse cx="100" cy="62" rx="47" ry="45" fill="${pelle}" ${L}/>`;
-  s += `<ellipse cx="74" cy="82" rx="7" ry="4" fill="#FF6B6B" opacity=".28"/><ellipse cx="126" cy="82" rx="7" ry="4" fill="#FF6B6B" opacity=".28"/>`;
+  // collo, orecchie, testa (luce in alto a sinistra, ombra in basso a destra)
+  s += `<rect x="89" y="94" width="22" height="16" rx="5" fill="${scurisci(pelle, .1)}" ${L}/>`;
+  s += `<circle cx="54" cy="68" r="10" fill="${pelle}" ${L}/><circle cx="146" cy="68" r="10" fill="${pelleO}" ${L}/>`;
+  s += `<ellipse cx="100" cy="62" rx="47" ry="45" fill="${pelleO}"/>`;
+  s += `<g clip-path="url(#${id}t)"><ellipse cx="93" cy="56" rx="47" ry="45" fill="${pelle}"/><path d="M60 46q10-22 34-28" fill="none" stroke="${LUCE}" stroke-width="6" stroke-linecap="round"/></g>`;
+  s += `<ellipse cx="100" cy="62" rx="47" ry="45" fill="none" ${L}/>`;
+  s += `<ellipse cx="72" cy="83" rx="8" ry="4.5" fill="#FF6B6B" opacity=".3"/><ellipse cx="128" cy="83" rx="8" ry="4.5" fill="#FF6B6B" opacity=".3"/>`;
   // occhi e bocca
-  const occhio = (x) => `<ellipse cx="${x}" cy="66" rx="9" ry="11" fill="#fff" stroke="${INK}" stroke-width="3.5"/><circle cx="${x + 2}" cy="68" r="5" fill="${INK}"/><circle cx="${x + 4}" cy="65" r="1.8" fill="#fff"/>`;
-  if (a.occhi === "felici") {
-    s += `<path d="M76 69q8-10 16 0M108 69q8-10 16 0" fill="none" stroke="${INK}" stroke-width="5" stroke-linecap="round"/>`;
-    s += `<path d="M77 51q7-4 14 0M109 51q7-4 14 0" fill="none" stroke="${INK}" stroke-width="4" stroke-linecap="round"/>`;
-    s += `<path d="M86 83q14 14 28 0z" fill="#fff" stroke="${INK}" stroke-width="4" stroke-linejoin="round"/>`;
-  } else if (a.occhi === "grinta") {
-    s += occhio(84) + occhio(116);
-    s += `<path d="M73 50l20 7M127 50l-20 7" stroke="${INK}" stroke-width="6" stroke-linecap="round"/>`;
-    s += `<path d="M87 85q13 9 26 0z" fill="#fff" stroke="${INK}" stroke-width="4" stroke-linejoin="round"/><path d="M87 85h26" stroke="${INK}" stroke-width="2"/>`;
-  } else if (a.occhi === "tranquilli") {
-    s += occhio(84) + occhio(116);
-    s += `<path d="M74 60q10-4 20 0v-6h-20zM106 60q10-4 20 0v-6h-20z" fill="${pelle}" stroke="${INK}" stroke-width="3.5" stroke-linejoin="round"/>`;
-    s += `<path d="M90 86q10 6 20 0" fill="none" stroke="${INK}" stroke-width="4" stroke-linecap="round"/>`;
-  } else {
-    s += occhio(84) + occhio(116);
-    s += `<path d="M76 50q8-5 16 0M108 50q8-5 16 0" fill="none" stroke="${INK}" stroke-width="4.5" stroke-linecap="round"/>`;
-    s += `<path d="M88 85q12 10 24 0" fill="none" stroke="${INK}" stroke-width="4.5" stroke-linecap="round"/>`;
+  const occhio = x => `<ellipse cx="${x}" cy="66" rx="10.5" ry="12.5" fill="#fff" stroke="${INK}" stroke-width="3.8"/><circle cx="${x + 2}" cy="68" r="6" fill="${INK}"/><circle cx="${x + 4.5}" cy="64.5" r="2.4" fill="#fff"/><circle cx="${x - .5}" cy="71.5" r="1.2" fill="#fff"/>`;
+  const aperti = `<g class="occhi-ap">${occhio(83) + occhio(117)}</g>`;
+  const sopr = (d, w = 6) => `<path d="${d}" fill="none" stroke="${INK}" stroke-width="${w}" stroke-linecap="round"/>`;
+  const denti = `<path d="M86 84q14 13 28 0z" fill="#fff" stroke="${INK}" stroke-width="4" stroke-linejoin="round"/><path d="M86 84h28" stroke="${INK}" stroke-width="2"/>`;
+  switch (a.occhi) {
+    case "felici":
+      s += sopr("M74 70q9-11 18 0M108 70q9-11 18 0", 5.5) + sopr("M75 50q8-5 16 0M109 50q8-5 16 0", 5);
+      s += `<path d="M84 83q16 16 32 0z" fill="#fff" stroke="${INK}" stroke-width="4" stroke-linejoin="round"/>`; break;
+    case "grinta":
+      s += aperti + sopr("M71 48l22 8M129 48l-22 8", 7) + denti; break;
+    case "tranquilli":
+      s += aperti + `<path d="M71 59q12-5 24 0v-8h-24zM105 59q12-5 24 0v-8h-24z" fill="${pelle}" stroke="${INK}" stroke-width="3.8" stroke-linejoin="round"/>`;
+      s += sopr("M89 86q11 7 22 0", 4.5); break;
+    case "furbo":
+      s += aperti + `<path d="M71 58q12-4 24 0v-8h-24z" fill="${pelle}" stroke="${INK}" stroke-width="3.8" stroke-linejoin="round"/>`;
+      s += sopr("M72 50l21 4M107 47q11-9 22-3", 6.5) + sopr("M87 87q14 4 27-7", 4.5); break;
+    case "urlo":
+      s += aperti + sopr("M71 47l22 9M129 47l-22 9", 7);
+      s += `<path d="M85 78q15-5 30 0q0 24-15 25q-15-1-15-25z" fill="#6A1410" stroke="${INK}" stroke-width="4" stroke-linejoin="round"/><path d="M88.5 79q11.5-3 23 0l-1 4.5q-10.5-2-21 0z" fill="#fff"/><path d="M92 98q8-8 16 0q-8 4-16 0z" fill="#FF7A7A"/>`; break;
+    default:
+      s += aperti + sopr("M74 49q9-6 18 0M108 49q9-6 18 0", 5.5) + sopr("M87 85q13 10 26 0", 4.5);
   }
   // capelli
   const C = `fill="${cap}" ${L}`;
-  const lucido = `<path d="M84 26q12-5 24-2" fill="none" stroke="rgba(255,255,255,.35)" stroke-width="4" stroke-linecap="round"/>`;
+  const lucido = `<path d="M82 25q13-5 26-2" fill="none" stroke="rgba(255,255,255,.4)" stroke-width="5" stroke-linecap="round"/>`;
   switch (a.capelli) {
     case "ciuffo":
       s += `<path d="M53 62q-4-44 47-45q51 1 47 45q-8-14-22-18q-12 7-28 5q-16 6-30-2q-8 5-14 15z" ${C}/>`;
@@ -604,7 +823,7 @@ function fighterSVG(av, o = {}) {
     case "ricci":
       s += `<path d="M54 60q0-42 46-43q46 1 46 43z" ${C}/>`;
       [[58,46],[66,32],[80,22],[96,17],[112,18],[127,24],[139,35],[145,49]].forEach(([x, y]) => { s += `<circle cx="${x}" cy="${y}" r="12" ${C}/>`; });
-      s += `<path d="M62 52q38-14 76 0" fill="none" stroke="${cap}" stroke-width="12"/>`; break;
+      s += `<path d="M62 52q38-14 76 0" fill="none" stroke="${cap}" stroke-width="12"/><path d="M76 24q8-4 14-3" fill="none" stroke="rgba(255,255,255,.35)" stroke-width="4" stroke-linecap="round"/>`; break;
     case "rasati":
       s += `<path d="M55 56q2-38 45-39q43 1 45 39q-45-17-90 0z" fill="${cap}" opacity=".85" ${L} stroke-width="4"/>`; break;
     case "cresta":
@@ -616,7 +835,7 @@ function fighterSVG(av, o = {}) {
       s += `<path d="M53 62q-4-44 47-45q51 1 47 45q-8-14-22-18q-12 7-28 5q-16 6-30-2q-8 5-14 15z" ${C}/>` + lucido;
   }
   if (a.acc === "fascetta") s += `<path d="M54 48q46-18 92 0l-1 10q-45-16-90 0z" fill="#fff" ${L} stroke-width="4"/><path d="M58 52q42-14 84 0" stroke="#922F29" stroke-width="3" fill="none"/>`;
-  s += `</svg>`;
+  s += `</g></svg>`;
   return s;
 }
 function bossSVG(b, quota, vinto) {
@@ -656,6 +875,75 @@ const ICONE = {
   mosse:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18c3 0 4-2 6-5s3-5 6-5h4M16 4l4 4-4 4"/><circle cx="6" cy="18" r="2.4"/></svg>`,
   combine:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13.5" r="7.5"/><path d="M12 13.5l3-3M10 2.5h4M12 2.5v3.5"/></svg>`
 };
+/* ---------- disegni delle sfide a casa e delle mosse speciali ----------
+   Ogni disegno è uno schema semplice (palla, piede, frecce). Nel foglio grande
+   la palla si muove lungo la freccia (animato = true). */
+let DID = 0;
+const DK = `stroke="${INK}" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"`;
+function palla(x, y, r = 8) {
+  const p = [0, 1, 2, 3, 4].map(i => { const a = (-90 + 72 * i) * Math.PI / 180; return `${(x + Math.cos(a) * r * .45).toFixed(1)} ${(y + Math.sin(a) * r * .45).toFixed(1)}`; });
+  return `<circle cx="${x}" cy="${y}" r="${r}" fill="#fff" ${DK}/><path d="M${p.join("L")}z" fill="${INK}"/>`;
+}
+// scarpa vista di lato, punta verso destra (giu = scarpa girata)
+const scarpaLato = (x, y, col, giu) => `<g transform="translate(${x} ${y})${giu ? " scale(-1 1)" : ""}"><path d="M-16 -16q0-4 4-4h9q4 0 5 4l2 5q14 1 17 7q1 4-1 6h-36z" fill="${col}" ${DK}/><path d="M-15 -2h33" stroke="#fff" stroke-width="3"/><path d="M-10 2.5v2M0 2.5v2M10 2.5v2" stroke="${INK}" stroke-width="3.5" stroke-linecap="round"/></g>`;
+// impronta vista dall'alto
+const orma = (x, y, rot, col = "#922F29") => `<g transform="translate(${x} ${y}) rotate(${rot})"><path d="M0 -12q6 0 6 8v8q0 8-6 8q-6 0-6-8v-8q0-8 6-8z" fill="${col}" ${DK} stroke-width="3"/></g>`;
+// giocatore visto dall'alto (spalle e testa)
+const dallAlto = (x, y, col, rot = 0) => `<g transform="translate(${x} ${y}) rotate(${rot})"><ellipse cx="0" cy="0" rx="14" ry="8" fill="${col}" ${DK}/><circle cx="0" cy="0" r="6" fill="#E3AC7E" ${DK} stroke-width="3"/></g>`;
+function freccia(d, col, id, tratteggio) {
+  return `<path d="${d}" fill="none" stroke="${col}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"${tratteggio ? ` stroke-dasharray="1 7"` : ""} marker-end="url(#${id}${col.replace("#", "")})"/>`;
+}
+const punta = (id, col) => `<marker id="${id}${col.replace("#", "")}" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="3.6" markerHeight="3.6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="${col}"/></marker>`;
+const etichetta = tipo => tipo === "trenta"
+  ? `<rect x="3" y="3" width="31" height="19" rx="7" fill="#FFC531" ${DK} stroke-width="3"/><text x="18.5" y="17.5" text-anchor="middle" font-family="Lilita One, Arial Rounded MT Bold, sans-serif" font-size="13" fill="${INK}">30″</text>`
+  : tipo === "crono" ? `<circle cx="16" cy="15" r="10" fill="#fff" ${DK} stroke-width="3"/><path d="M16 3v-1M13 2h6M16 15l4-4" stroke="${INK}" stroke-width="3" stroke-linecap="round"/>` : "";
+// ogni disegno: { vb, sotto: elementi fissi, via: percorso della palla, altri: [d, colore, tratteggio], palla: [x, y] se la palla sta ferma }
+const GRANATA = "#922F29", ORO = "#E89B00", GRIGIO = "#9A8D88";
+const DIS_SFIDA = {
+  palleggi:{ sotto:`${scarpaLato(48, 66, GRANATA)}<path d="M30 46q-8-16 2-30M70 46q8-16-2-30" fill="none" stroke="${GRIGIO}" stroke-width="3.5" stroke-linecap="round" stroke-dasharray="1 7"/>`,
+             via:"M50 44 C50 30 50 16 50 16 C50 16 50 30 50 44", palla:[50, 22] },
+  muro_f:{ sotto:`<rect x="80" y="10" width="16" height="56" rx="3" fill="#C9694A" ${DK}/><path d="M80 24h16M80 38h16M80 52h16M88 10v14M88 38v14" stroke="${INK}" stroke-width="2.5"/>${scarpaLato(20, 66, GRANATA)}`,
+           via:"M40 52 L 72 40 L 40 52", altri:[["M44 38h26", INK], ["M70 58h-26", INK]], palla:[52, 48] },
+  muro_d:{ sotto:`<rect x="80" y="10" width="16" height="56" rx="3" fill="#C9694A" ${DK}/><path d="M80 24h16M80 38h16M80 52h16M88 10v14M88 38v14" stroke="${INK}" stroke-width="2.5"/>${scarpaLato(20, 66, "#FFC531")}<path d="M38 26l3 6 6 1-5 4 1 6-5-3-5 3 1-6-5-4 6-1z" fill="#9B87FF" stroke="${INK}" stroke-width="2.2" stroke-linejoin="round"/>`,
+           via:"M40 52 L 72 40 L 40 52", altri:[["M50 38h20", INK], ["M70 58h-20", INK]], palla:[56, 48] },
+  slalom:{ sotto:[26, 44, 62, 80].map(x => `<path d="M${x - 5} 62v-18q0-4 3-6v-6h4v6q3 2 3 6v18z" fill="#43D17A" ${DK} stroke-width="3"/><rect x="${x - 2.5}" y="27" width="5" height="5" fill="#57C7FF" stroke="${INK}" stroke-width="2"/>`).join(""),
+           via:"M10 54 C18 54 20 40 35 40 S 46 58 53 58 S 64 40 71 40 S 84 58 94 52", traccia:true, palla:[10, 54] },
+  suola:{ sotto:`<g transform="translate(50 20) rotate(-10)"><path d="M0 -14q9 0 9 10v8q0 10-9 10q-9 0-9-10v-8q0-10 9-10z" fill="#FFC531" ${DK} stroke-width="3"/><circle cx="-3" cy="-6" r="1.8" fill="${INK}"/><circle cx="3" cy="-6" r="1.8" fill="${INK}"/><circle cx="-3" cy="3" r="1.8" fill="${INK}"/><circle cx="3" cy="3" r="1.8" fill="${INK}"/></g>`,
+          altri:[["M26 30q-10 14 0 28", GRANATA], ["M74 58q10-14 0-28", GRANATA]], via:"M50 50 L 44 50 L 56 50 L 50 50", palla:[50, 50] },
+  equilibrio:{ sotto:`<g ${DK}><path d="M24 34h52" stroke-width="6"/><path d="M50 52v16" stroke-width="6"/><path d="M50 52l12 4-2 8" fill="none" stroke-width="6"/></g><rect x="43" y="28" width="14" height="26" rx="6" fill="${GRANATA}" ${DK}/><circle cx="50" cy="18" r="9" fill="#E3AC7E" ${DK}/><path d="M45 18q2 2 4 0M51 18q2 2 4 0" fill="none" stroke="${INK}" stroke-width="2" stroke-linecap="round"/><path d="M18 30q-4 4 0 8M82 30q4 4 0 8" fill="none" stroke="${GRIGIO}" stroke-width="3" stroke-linecap="round"/>` }
+};
+const DIS_MOSSA = {
+  finta:{ sotto:dallAlto(50, 40, GRANATA, -12), altri:[["M38 32 L 14 20", GRIGIO, true]], via:"M52 56 C 66 58 74 50 88 36", palla:[52, 56] },
+  doppio:{ sotto:`${orma(40, 60, -10)}${orma(70, 58, 15, "#FFC531")}`, altri:[["M40 46 C 38 26 64 22 66 44", "#FFC531", true]], via:"M52 40 C 44 38 30 32 12 22", palla:[52, 40] },
+  cruyff:{ sotto:`${orma(48, 42, 0)}${orma(64, 26, 10, "#FFC531")}`, altri:[["M70 12 L 84 6", GRIGIO, true]], via:"M60 14 C 58 34 50 58 36 62 S 18 64 10 70", palla:[60, 14] },
+  suola:{ sotto:`${orma(50, 22, 0, "#FFC531")}${orma(36, 60, -8)}`, via:"M50 30 L 50 54 Q 50 60 56 60 L 88 60", palla:[50, 30] },
+  marsiglia:{ sotto:`${orma(40, 40, -20)}${orma(60, 40, 20, "#FFC531")}`, altri:[["M50 14 A 26 26 0 1 1 26 50", GRIGIO, true]], via:"M50 62 A 22 22 0 0 1 28 40 A 22 22 0 0 1 50 18", palla:[50, 62] },
+  stop:{ sotto:`${orma(50, 46, 20)}`, altri:[["M8 8 C 22 16 32 26 40 34", GRIGIO, true]], via:"M44 38 C 58 50 70 52 90 48", palla:[44, 38] },
+  esterno:{ sotto:`<g transform="translate(40 50) rotate(-25)"><path d="M0 -12q6 0 6 8v8q0 8-6 8q-6 0-6-8v-8q0-8 6-8z" fill="${GRANATA}" ${DK} stroke-width="3"/><path d="M6 -6v10" stroke="#FFC531" stroke-width="4" stroke-linecap="round"/></g>`,
+           via:"M52 42 C 70 40 80 30 90 10", palla:[52, 42] },
+  collo:{ sotto:`<path d="M80 14v52M80 14h16v52" fill="none" ${DK}/><path d="M84 20h12M84 30h12M84 40h12M84 50h12M84 60h12M88 14v52" stroke="${GRIGIO}" stroke-width="1.6"/>${scarpaLato(24, 66, GRANATA)}<path d="M18 52l6-3M22 56l6-3" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/>`,
+          via:"M44 58 C 56 44 66 36 84 30", palla:[44, 58] },
+  debole:{ sotto:`<path d="M20 14v52M20 14h-16v52" fill="none" ${DK}/><path d="M4 20h12M4 30h12M4 40h12M4 50h12M4 60h12M12 14v52" stroke="${GRIGIO}" stroke-width="1.6"/>${scarpaLato(76, 66, "#FFC531", true)}<path d="M66 20l3 6 6 1-5 4 1 6-5-3-5 3 1-6-5-4 6-1z" fill="#9B87FF" stroke="${INK}" stroke-width="2.2" stroke-linejoin="round"/>`,
+           via:"M56 58 C 44 44 34 36 16 30", palla:[56, 58] },
+  v:{ sotto:`${orma(36, 26, -10, "#FFC531")}${orma(56, 62, 10)}`, via:"M40 22 L 44 54 L 84 22", palla:[40, 22] },
+  uscita:{ sotto:`<path d="M18 8h64" stroke="${INK}" stroke-width="5" stroke-linecap="round"/><path d="M18 8v8M82 8v8" ${DK}/><g transform="translate(50 36)"><ellipse cx="0" cy="0" rx="26" ry="9" fill="#FFD23A" ${DK}/><circle cx="-24" cy="0" r="6" fill="#FF8A3D" ${DK} stroke-width="3"/><circle cx="24" cy="0" r="6" fill="#FF8A3D" ${DK} stroke-width="3"/><circle cx="0" cy="-2" r="6" fill="#E3AC7E" ${DK} stroke-width="3"/></g>`,
+           altri:[["M50 74 L 50 52", GRIGIO, true]], via:"M50 76 L 50 48", palla:[50, 70] },
+  rimessa:{ sotto:`<path d="M6 76h30" stroke="${INK}" stroke-width="5" stroke-linecap="round"/>${dallAlto(24, 62, "#FFD23A", -30)}${dallAlto(80, 20, GRANATA, 30)}`, via:"M32 52 C 46 30 60 22 72 22", palla:[32, 52] }
+};
+function disegno(k, quale, animato) {
+  const D = (quale === "sfida" ? DIS_SFIDA : DIS_MOSSA)[k];
+  const id = "dz" + (++DID);
+  if (!D) return `<svg viewBox="0 0 100 80" xmlns="http://www.w3.org/2000/svg">${palla(50, 40, 14)}</svg>`;
+  const colori = new Set([ORO, GRIGIO, ...(D.altri || []).map(a => a[1])]);
+  let s = `<svg viewBox="0 0 100 80" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>${[...colori].map(c => punta(id, c)).join("")}</defs>`;
+  s += D.sotto || "";
+  for (const [d, col, tr] of D.altri || []) s += freccia(d, col, id, tr);
+  if (D.via && (quale === "mossa" || D.traccia)) s += freccia(D.via, quale === "mossa" ? ORO : GRIGIO, id, quale !== "mossa");
+  if (D.via && animato && !riduci()) s += `<g>${palla(0, 0, 8)}<animateMotion dur="2.4s" repeatCount="indefinite" path="${D.via}"/></g>`;
+  else if (D.palla) s += palla(D.palla[0], D.palla[1], 8);
+  if (quale === "sfida") s += etichetta((SFIDA[k] || {}).tipo);
+  return s + `</svg>`;
+}
 const coppa = (w = 26) => `<svg width="${w}" height="${w}" viewBox="0 0 24 24"><path d="M6 3h12v5a6 6 0 0 1-12 0z" fill="#FFC531" stroke="#1E0B0A" stroke-width="2" stroke-linejoin="round"/><path d="M6 5H3.5a3 3 0 0 0 3 4.5M18 5h2.5a3 3 0 0 1-3 4.5" fill="none" stroke="#1E0B0A" stroke-width="2"/><path d="M10 14h4v3h-4zM7.5 21h9l-1-4h-7z" fill="#E89B00" stroke="#1E0B0A" stroke-width="2" stroke-linejoin="round"/></svg>`;
 const stellaIco = (col) => `<svg class="stella-ico" viewBox="0 0 24 24"><path d="M12 2.5l2.8 5.8 6.4.9-4.6 4.5 1.1 6.3L12 17l-5.7 3 1.1-6.3-4.6-4.5 6.4-.9z" fill="${col}" stroke="#1E0B0A" stroke-width="2" stroke-linejoin="round"/></svg>`;
 
@@ -746,11 +1034,17 @@ function render() {
   else if (S.modo === "ragazzo") html = vRagazzo();
   else if (S.modo === "staff") html = vStaff();
   else html = `<div class="vuoto" style="padding-top:40vh">Carico…</div>`;
-  app.className = "app" + (S.modo === "ragazzo" || (S.modo === "staff" && S.staff && S.staff.attivo) ? "" : " senza-tab");
+  app.className = "app" + (S.modo === "ragazzo" || (S.modo === "staff" && S.staff && S.staff.attivo) ? "" : " senza-tab") + (S.anima && S.modo === "ragazzo" ? " entra" : "");
+  S.anima = false;
   app.innerHTML = html;
   $("foglio").innerHTML = S.foglio ? `<div class="velo" data-act="velo"><div class="foglio" role="dialog" aria-modal="true">${S.foglio.html()}</div></div>` : "";
 }
-function rifai() { if (S.foglio) $("foglio").innerHTML = `<div class="velo" data-act="velo"><div class="foglio" role="dialog" aria-modal="true">${S.foglio.html()}</div></div>`; }
+function rifai() {
+  if (!S.foglio) return;
+  const f = document.querySelector("#foglio .foglio");
+  if (f) f.innerHTML = S.foglio.html();
+  else $("foglio").innerHTML = `<div class="velo" data-act="velo"><div class="foglio" role="dialog" aria-modal="true">${S.foglio.html()}</div></div>`;
+}
 function apri(html) { S.foglio = { html }; render(); }
 function chiudi() { fermaTimer(); S.foglio = null; render(); }
 let toastT = null;
@@ -866,7 +1160,7 @@ function editorAvatar(av, trofei, numero, conTitoli) {
       return `<button class="chip${String(a[tipo]) === String(k) ? " on" : ""}" ${ok ? `data-act="av" data-t="${tipo}" data-k="${esc(k)}"` : `disabled style="opacity:.55"`}>${extra || ""}${esc(nome)}${lucch(tipo, k)}</button>`;
     }).join("")}</div></div>`;
   const tondo = c => `<i style="width:18px;height:18px;border-radius:50%;background:${c};border:2px solid #1E0B0A;display:inline-block"></i>`;
-  let h = `<div class="eroe sf-${a.sfondo} cr-${a.cornice}${a.effetto === "scintille" ? " scintille" : ""}" style="margin-bottom:14px"><div class="numero">${esc(numero || "")}</div><div class="figura" id="anteprima">${fighterSVG(a, { numero })}</div></div>`;
+  let h = `<div class="eroe anteprima-av sf-${a.sfondo} cr-${a.cornice}${a.effetto === "scintille" ? " scintille" : ""}" style="margin-bottom:14px"><div class="numero">${esc(numero || "")}</div><div class="figura" id="anteprima">${fighterSVG(a, { numero })}</div></div>`;
   h += `<section class="pan chiaro">`;
   h += gruppo("Pelle", "pelle", PELLI.map((c, i) => [i, "", tondo(c)]));
   h += gruppo("Capelli", "capelli", CAPELLI.map(x => [x.k, x.nome]));
@@ -892,7 +1186,8 @@ function editorAvatar(av, trofei, numero, conTitoli) {
    --------------------------------------------------------------------- */
 function vRagazzo() {
   const D = S.io, c = S.c;
-  const dx = `${S.chiave ? `<button class="cambio" data-act="vaiStaff">Staff</button>` : ""}<div class="pill-trofei">${coppa(26)}<b class="num">${c.trofei}</b></div>`;
+  const on = SUONI.acceso();
+  const dx = `${S.chiave ? `<button class="cambio" data-act="vaiStaff">Staff</button>` : ""}<button class="suono${on ? "" : " off"}" data-act="suoni" aria-label="${on ? "Suoni accesi: tocca per spegnerli" : "Suoni spenti: tocca per accenderli"}" aria-pressed="${on}">${icoSuono(on)}</button><div class="pill-trofei" id="pillT">${coppa(26)}<b class="num" id="numT">${V.trofei == null ? c.trofei : V.trofei}</b></div>`;
   let h = testata(dx);
   if (S.tab === "fighter") h += tFighter();
   else if (S.tab === "sfide") h += tSfide();
@@ -907,7 +1202,7 @@ function cardEroe(io, c) {
   const tit = a.titolo && titoliDisponibili(c).includes(a.titolo) ? a.titolo : c.grado.nome;
   return `<div class="eroe sf-${a.sfondo} cr-${a.cornice}${a.effetto === "scintille" ? " scintille" : ""}">
     <div class="numero">${esc(io.numero || "")}</div>
-    <div class="figura">${fighterSVG(a, { numero:io.numero })}</div>
+    <div class="figura" data-act="salta" aria-label="Tocca il tuo Fighter">${fighterSVG(a, { numero:io.numero })}</div>
     <div class="targa"><div><div class="nome">${esc(io.soprannome)}</div><div class="titolo">${esc(tit)}</div></div><span class="grado g-${c.grado.k}">${c.grado.nome}</span></div>
   </div>`;
 }
@@ -916,11 +1211,10 @@ function tFighter() {
   const stelle = D.eventi.filter(e => e.tipo === "stella" && e.settimana === w);
   let h = cardEroe(D.io, c);
   h += `<div class="riga" style="margin:-4px 0 18px"><button class="btn bianco pieno" data-act="personalizza">Personalizza</button></div>`;
-  h += `<section class="pan missione" style="background:${mis.col}">
-    <span class="etichetta">Missione della settimana</span>
+  h += `<section class="pan missione" style="background:${mis.col}" data-act="missione" role="button" tabindex="0" aria-label="Missione della settimana: ${mis.missione}. Tocca per sapere cosa conta">
+    <span class="etichetta">Missione della settimana</span><span class="apri" aria-hidden="true">?</span>
     <div class="grande">${mis.missione}</div>
-    <p style="color:#1E0B0A;font-weight:800;margin:0 0 6px">${esc(mis.testo)}</p>
-    <p style="color:#1E0B0A;margin:0" class="piccolo">Una stella ${mis.nome.toLowerCase()} questa settimana vale ${T.stella + T.missione} trofei invece di ${T.stella}.</p>
+    <span class="bonus">${stellaIco(mis.col)}Stella ${mis.nome.toLowerCase()}: ${T.stella + T.missione} trofei invece di ${T.stella}</span>
   </section>`;
   h += `<section class="pan"><h3>Le tue stelle della settimana</h3>`;
   if (!stelle.length) h += `<p class="fioco" style="margin:0">Ancora nessuna. In allenamento e in partita il mister guarda quattro cose: impegno, coraggio, rispetto e squadra.</p>`;
@@ -935,13 +1229,13 @@ function tSfide() {
   const mie = D.eventi.filter(e => e.tipo === "sfida" && e.settimana === w);
   const conta = Math.min(T.sfidaMax, mie.length);
   let h = `<h1 class="d">Sfide a casa</h1>
-    <p class="fioco">Ogni settimana le prime ${T.sfidaMax} sfide valgono ${T.sfida} trofei l'una, e battere il tuo record ne vale altri ${T.record}. Un genitore conferma con il PIN.</p>
-    <div class="pan" style="padding:12px 16px"><div class="riga sp"><b>Questa settimana</b><span class="d-s" style="font-size:22px;color:var(--oro)">${conta} di ${T.sfidaMax}</span></div></div>
+    <div class="pan" style="padding:12px 16px"><div class="riga sp"><b>Questa settimana</b><span class="slot" aria-label="${conta} di ${T.sfidaMax}">${Array.from({ length:T.sfidaMax }, (_, i) => `<i class="${i < conta ? "on" : ""}">${i < conta ? coppa(18) : ""}</i>`).join("")}</span></div>
+      <p class="fioco piccolo" style="margin:8px 0 0">+${T.sfida} trofei a sfida (le prime ${T.sfidaMax}) · +${T.record} se batti il record · conferma un genitore con il PIN</p></div>
     <div class="gr2" style="margin:0 0 18px">`;
   for (const s of SFIDE) {
     const fatte = mie.filter(e => e.dati.sfida === s.k).length;
     const rec = c.record[s.k];
-    h += `<button class="tessera${fatte ? " fatta" : ""}" data-act="sfida" data-k="${s.k}">${fatte ? `<span class="badge">fatta</span>` : ""}<span class="t">${esc(s.nome)}</span><span class="r">${rec != null ? "Record: " + fmtVal(rec, s.unita) : "Nessun record"}</span></button>`;
+    h += `<button class="tessera${fatte ? " fatta" : ""}" data-act="sfida" data-k="${s.k}">${fatte ? `<span class="badge">fatta</span>` : ""}<span class="dis">${disegno(s.k, "sfida")}</span><span class="t">${esc(s.nome)}</span><span class="r">${rec != null ? "Record: " + fmtVal(rec, s.unita) : "Nessun record"}</span></button>`;
   }
   h += `</div>`;
   // obiettivo
@@ -1030,10 +1324,14 @@ function tStrada() {
   const c = S.c, a = { ...AV_BASE, ...S.io.io.avatar };
   let h = `<h1 class="d">I tuoi trofei</h1>`;
   const prossima = STRADA.find(t => t.t > c.trofei);
-  h += `<section class="pan"><div class="riga">${coppa(44)}<div><div class="d-s" style="font-size:34px;line-height:1;color:var(--oro)">${c.trofei}</div><div class="fioco">${prossima ? `ne mancano ${prossima.t - c.trofei} per: ${prossima.premi.map(nomePremio).join(", ")}` : "Hai completato la strada!"}</div></div></div></section>`;
+  const prima = [...STRADA].reverse().find(t => t.t <= c.trofei) || STRADA[0];
+  const quota = prossima ? (c.trofei - prima.t) / (prossima.t - prima.t) : 1;
+  h += `<section class="pan"><div class="riga">${coppa(44)}<div><div class="d-s" style="font-size:34px;line-height:1;color:var(--oro)">${c.trofei}</div><div class="fioco">${prossima ? `ne mancano ${prossima.t - c.trofei} per: ${prossima.premi.map(nomePremio).join(", ")}` : "Hai completato la strada!"}</div></div></div>
+    <div class="prog" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(quota * 100)}"><i style="width:${Math.max(4, Math.round(quota * 100))}%"></i></div>
+    ${prossima ? `<div class="riga sp piccolo fioco"><span class="num">${prima.t}</span><span class="num">${prossima.t}</span></div>` : ""}</section>`;
   // mosse
   h += `<section class="pan"><h3>Mosse speciali</h3><p class="fioco piccolo">Si sbloccano facendole vedere al mister in allenamento. Ognuna vale ${T.mossa} trofei.</p><div class="gr2">`;
-  h += MOSSE.map(m => { const ok = c.mosse[m.k]; return `<button class="tessera${ok ? " fatta" : " chiusa"}" data-act="mossa" data-k="${m.k}">${ok ? `<span class="badge">sbloccata</span>` : ""}<span class="t">${esc(m.nome)}</span><span class="r">${ok ? quando(ok) : "Falla vedere al mister"}</span></button>`; }).join("");
+  h += MOSSE.map(m => { const ok = c.mosse[m.k]; return `<button class="tessera${ok ? " fatta" : " chiusa"}" data-act="mossa" data-k="${m.k}">${ok ? `<span class="badge">sbloccata</span>` : ""}<span class="dis">${disegno(m.k, "mossa")}</span><span class="t">${esc(m.nome)}</span><span class="r">${ok ? quando(ok) : "Falla vedere al mister"}</span></button>`; }).join("");
   h += `</div></section>`;
   // strada
   h += `<section class="pan"><h3>La strada dei trofei</h3><div class="strada">`;
@@ -1062,15 +1360,14 @@ function tStrada() {
 /* ---------- fogli del ragazzo ---------- */
 let timer = null;
 function fermaTimer() { if (timer) { clearInterval(timer.id); timer = null; } }
-function bip() { try { const A = new (window.AudioContext || window.webkitAudioContext)(), o = A.createOscillator(), g = A.createGain(); o.frequency.value = 880; o.connect(g); g.connect(A.destination); g.gain.value = .25; o.start(); setTimeout(() => { o.stop(); A.close(); }, 450); } catch (e) {} }
 function fSfida(k) {
   const s = SFIDA[k], rec = S.c.record[k];
   const F = { k, valore:"", pin:"", err:"" };
   S.fs = F;
   const html = () => {
-    let h = `<button class="chiudi" data-act="chiudi" aria-label="Chiudi">✕</button><h2>${esc(s.nome)}</h2><p>${esc(s.come)}</p>`;
+    let h = `<button class="chiudi" data-act="chiudi" aria-label="Chiudi">✕</button><h2>${esc(s.nome)}</h2><div class="disegno basso">${disegno(k, "sfida", !timer)}</div><p>${esc(s.come)}</p>`;
     h += `<p class="fioco">${rec != null ? "Il tuo record: <b>" + fmtVal(rec, s.unita) + "</b>" : "È la prima volta: qualunque risultato diventa il tuo record."}</p>`;
-    if (s.tipo === "trenta") h += `<div class="timer num" id="tm">${timer && timer.k === "trenta" ? timer.v : 30}</div><button class="btn bianco pieno" data-act="timer30">${timer ? "Ferma" : "Avvia 30 secondi"}</button><p class="fioco piccolo" style="text-align:center;margin:8px 0 14px">Conta tu: alla fine suona.</p>`;
+    if (s.tipo === "trenta") h += `<div class="timer num" id="tm">${timer && timer.k === "trenta" ? timer.v : 30}</div><button class="btn bianco pieno" data-act="timer30">${timer ? "Ferma" : "Avvia 30 secondi"}</button><p class="fioco piccolo" style="text-align:center;margin:8px 0 14px">Conta tu: alla fine senti il fischio.</p>`;
     if (s.tipo === "crono") h += `<div class="timer num" id="tm">${timer && timer.k === "crono" ? timer.v : "0,0"}</div><button class="btn bianco pieno" data-act="crono">${timer ? "Stop" : "Via!"}</button><p class="fioco piccolo" style="text-align:center;margin:8px 0 14px">Il tempo si scrive da solo quando premi Stop.</p>`;
     h += F.err ? `<div class="errore">${esc(F.err)}</div>` : "";
     h += `<label class="campo"><span>Risultato (${esc(s.unita)})</span><input class="inp" id="valSfida" inputmode="decimal" value="${esc(F.valore)}"></label>`;
@@ -1086,7 +1383,7 @@ function fGG(id) {
 }
 function fMossa(k) {
   const m = MOSSA[k], ok = S.c.mosse[k];
-  apri(() => `<button class="chiudi" data-act="chiudi" aria-label="Chiudi">✕</button><h2>${esc(m.nome)}</h2><p>${esc(m.come)}</p><p class="fioco">${ok ? "Sbloccata il " + quando(ok) + "." : "Allenala a casa, poi falla vedere al mister in allenamento: la sblocca lui."}</p>`);
+  apri(() => `<button class="chiudi" data-act="chiudi" aria-label="Chiudi">✕</button><h2>${esc(m.nome)}</h2><div class="disegno">${disegno(k, "mossa", true)}</div><p>${esc(m.come)}</p><p class="fioco">${ok ? "Sbloccata il " + quando(ok) + "." : "Allenala a casa, poi falla vedere al mister in allenamento: la sblocca lui."}</p>`);
 }
 function fPersonalizza() {
   const io = S.io.io;
@@ -1355,9 +1652,11 @@ async function caricaRagazzo(silenzioso) {
     const prima = S.modo;
     S.modo = r.io.stato === "attivo" ? "ragazzo" : "attesa";
     if (r.io.stato === "sospeso") S.modo = "attesa";
+    if (V.trofei == null) { const v = lgetJ("ngu:visto:" + r.io.id, null); V.trofei = v ? Math.min(v.trofei, S.c.trofei) : S.c.trofei; }
+    if (prima !== "ragazzo" && S.modo === "ragazzo") S.anima = true;
     manifest();
     if (!silenzioso || prima !== S.modo) render();
-    if (S.modo === "ragazzo") novita();
+    if (S.modo === "ragazzo") { novita(); contaTrofei(); animaBoss(); }
   } catch (e) { S.errore = msgErr(e.message); if (!S.io) { S.modo = "benvenuto"; } render(); }
 }
 async function caricaStaff() {
@@ -1373,6 +1672,43 @@ async function caricaStaff() {
 let attesaT = null;
 function controllaAttesa() { clearInterval(attesaT); attesaT = setInterval(() => { if (S.modo === "attesa" && !S.foglio) caricaRagazzo(true); else if (S.modo !== "attesa") clearInterval(attesaT); }, 15000); }
 
+/* ---------- feste a schermo intero (una dopo l'altra) ---------- */
+const FESTE = [];
+function festa(html, suono) { FESTE.push({ html, suono }); if (!$("festa").innerHTML) prossimaFesta(); }
+function prossimaFesta() {
+  const f = FESTE.shift();
+  if (!f) { $("festa").innerHTML = ""; contaTrofei(); return; }
+  $("festa").innerHTML = `<div class="festa" data-act="chiudiFesta"><div class="scatola" role="dialog" aria-modal="true">${f.html}</div></div>`;
+  if (f.suono) SUONI.suona(f.suono);
+}
+const raggi = `<div class="raggi"></div>`;
+const coriandoli = () => riduci() ? "" : `<div class="coriandoli">${Array.from({ length:26 }, (_, i) => `<i style="background:${["#FFC531","#FF4F5E","#57C7FF","#43D17A","#9B87FF"][i % 5]};--x:${Math.round(Math.cos(i) * (120 + (i * 37) % 90))}px;--y:${Math.round(Math.sin(i) * (120 + (i * 53) % 90))}px;--r:${i * 47}deg;animation-delay:${(i % 6) * 30}ms"></i>`).join("")}</div>`;
+const figFesta = () => `<div class="figura salta" style="display:flex;justify-content:center">${fighterSVG(S.io.io.avatar, { numero:S.io.io.numero })}</div>`;
+// piccola immagine di ciò che si è sbloccato
+function icoPremio([t, k]) {
+  if (t === "maglia") { const x = KIT[k]; return `<svg viewBox="0 0 64 56"><path d="M14 8q18-7 36 0l12 9-6 15-8-3v22h-32v-22l-8 3-6-15z" fill="${x.maglia}" ${DK}/><path d="M24 7l8 8 8-8" fill="none" stroke="${x.trim}" stroke-width="4" stroke-linecap="round"/>${x.banda ? `<path d="M20 18l26 26" stroke="${x.trim}" stroke-width="5"/>` : ""}</svg>`; }
+  if (t === "scarpe") return `<svg viewBox="0 0 64 44">${scarpaLato(30, 34, SCARPE[k].c)}</svg>`;
+  if (t === "sfondo") return `<div class="tess sf-${k}"></div>`;
+  if (t === "cornice") return `<div class="tess cr-${k}" style="background:#7a241f"></div>`;
+  if (t === "acc") return k === "fascetta"
+    ? `<svg viewBox="0 0 64 40"><path d="M6 22q26-16 52 0l-2 10q-24-14-48 0z" fill="#fff" ${DK}/><path d="M10 25q22-12 44 0" stroke="#922F29" stroke-width="3" fill="none"/></svg>`
+    : `<svg viewBox="0 0 64 40"><rect x="8" y="10" width="18" height="20" rx="5" fill="#fff" ${DK}/><rect x="38" y="10" width="18" height="20" rx="5" fill="#fff" ${DK}/><path d="M8 20h18M38 20h18" stroke="#922F29" stroke-width="3"/></svg>`;
+  if (t === "effetto") return `<svg viewBox="0 0 64 56"><path d="M32 6l6 16 16 6-16 6-6 16-6-16-16-6 16-6z" fill="#FFC531" ${DK}/><circle cx="52" cy="10" r="4" fill="#fff" ${DK} stroke-width="2.5"/></svg>`;
+  return `<svg viewBox="0 0 64 44"><path d="M4 12h56l-6 10 6 10h-56l6-10z" fill="#FFC531" ${DK}/></svg>`;
+}
+const tesserePremi = premi => `<div class="premi">${premi.map(p => `<div class="premio"><div class="ico">${icoPremio(p)}</div>${esc(nomePremio(p))}</div>`).join("")}</div>`;
+function festaGrado(g, premi) {
+  return raggi + coriandoli() + `<span class="sopra">Nuovo grado</span><h2 class="d titolo-festa">Sei diventato</h2>
+    <div class="stemma g-${g.k}">${g.nome}</div>${figFesta()}
+    ${tesserePremi(premi)}<button class="btn pieno" data-act="chiudiFesta">Avanti!</button>`;
+}
+function festaRecord(s, valore, prima, guadagno) {
+  return raggi + coriandoli() + `<span class="sopra">${esc(s.nome)}</span><h2 class="d titolo-festa">Nuovo record!</h2>
+    <div class="gigante num">${fmtVal(valore, s.unita).replace(/ (.+)$/, " <small>$1</small>")}</div>
+    <p class="fioco" style="margin:0 0 6px">Prima: ${fmtVal(prima, s.unita)}</p>${figFesta()}
+    ${guadagno ? `<div class="guadagno">+${guadagno} ${coppa(24)}</div>` : ""}<button class="btn pieno" data-act="chiudiFesta">Grande!</button>`;
+}
+
 /* ---------- novità e sblocchi (all'apertura) ---------- */
 function novita() {
   const id = S.io.io.id, k = "ngu:visto:" + id, v = lgetJ(k, null);
@@ -1380,10 +1716,9 @@ function novita() {
   if (!v) { lset(k, JSON.stringify({ trofei:S.c.trofei, ev:maxEv })); return; }
   const nuoveStelle = S.io.eventi.filter(e => e.id > v.ev && (e.tipo === "stella" || e.tipo === "mossa" || e.tipo === "greencard"));
   const nuoviGG = (S.io.gg_ricevuti || []).filter(e => e.id > v.ev);
-  const premi = [];
-  for (const tp of STRADA) if (tp.t > v.trofei && tp.t <= S.c.trofei) premi.push(...tp.premi.map(nomePremio));
+  const tappe = STRADA.filter(tp => tp.t > v.trofei && tp.t <= S.c.trofei);
   lset(k, JSON.stringify({ trofei:S.c.trofei, ev:maxEv }));
-  if (!nuoveStelle.length && !nuoviGG.length && !premi.length) return;
+  if (!nuoveStelle.length && !nuoviGG.length && !tappe.length) return;
   const righe = [];
   for (const e of nuoveStelle) {
     if (e.tipo === "stella") { const a = AREA[e.dati.area], f = (FRASI[e.dati.area] || [])[e.dati.frase]; righe.push(`<div class="voce" style="text-align:left">${stellaIco(a.col)}<div><b style="color:${a.col}">Stella ${a.nome.toLowerCase()}</b><div>${esc(f ? f.k : "")}</div></div></div>`); }
@@ -1391,12 +1726,97 @@ function novita() {
     else righe.push(`<div class="voce" style="text-align:left"><span class="pallino" style="background:var(--erba)">G</span><div><b>Green Card!</b> Un gesto di fair play che vale ${T.greencard} trofei.</div></div>`);
   }
   for (const g of nuoviGG) righe.push(`<div class="voce" style="text-align:left"><span class="pallino" style="background:var(--squadra)">GG</span><div><b>${esc(g.da)}</b>: ${esc(GG_FRASI[g.dati.frase] || "")}</div></div>`);
-  const coriandoli = premi.length ? `<div class="coriandoli">${Array.from({ length:26 }, (_, i) => `<i style="background:${["#FFC531","#FF4F5E","#57C7FF","#43D17A","#9B87FF"][i % 5]};--x:${Math.round(Math.cos(i) * (120 + (i * 37) % 90))}px;--y:${Math.round(Math.sin(i) * (120 + (i * 53) % 90))}px;--r:${i * 47}deg;animation-delay:${(i % 6) * 30}ms"></i>`).join("")}</div>` : "";
-  $("festa").innerHTML = `<div class="festa" data-act="chiudiFesta"><div class="scatola">${coriandoli}
-    ${premi.length ? `<h2 class="d" style="font-size:34px">Sbloccato!</h2><div style="display:flex;justify-content:center">${fighterSVG(S.io.io.avatar, { numero:S.io.io.numero }).replace("<svg", '<svg class="f"')}</div><p class="d-s" style="font-size:20px;color:var(--oro)">${premi.map(esc).join("<br>")}</p><p class="fioco piccolo">Lo trovi in Personalizza.</p>` : `<h2 class="d" style="font-size:30px">Novità per te</h2>`}
-    ${righe.length ? `<div style="background:var(--pannello-2);border:3px solid #1E0B0A;border-radius:16px;padding:4px 12px;margin:10px 0 14px">${righe.slice(-4).join("")}${righe.length > 4 ? `<div class="voce fioco piccolo">e altre ${righe.length - 4} cose belle: le trovi nel tuo Fighter</div>` : ""}</div>` : ""}
-    <button class="btn pieno" data-act="chiudiFesta">Grande!</button></div></div>`;
+  const pagine = [];
+  // un grado nuovo ha la sua schermata; gli altri premi vanno nella schermata "Sbloccato!"
+  const tGrado = [...tappe].reverse().find(tp => tp.grado);
+  if (tGrado) pagine.push({ html:festaGrado(GRADI.find(g => g.k === tGrado.grado), tGrado.premi), suono:"grado" });
+  const premi = tappe.filter(tp => tp !== tGrado).flatMap(tp => tp.premi);
+  const elenco = righe.length ? `<div style="background:var(--pannello-2);border:3px solid #1E0B0A;border-radius:16px;padding:4px 12px;margin:10px 0 14px">${righe.slice(-4).join("")}${righe.length > 4 ? `<div class="voce fioco piccolo">e altre ${righe.length - 4} cose belle: le trovi nel tuo Fighter</div>` : ""}</div>` : "";
+  if (premi.length) pagine.push({ html:raggi + coriandoli() + `<h2 class="d titolo-festa">Sbloccato!</h2>${figFesta()}${tesserePremi(premi)}<p class="fioco piccolo">Lo trovi in Personalizza.</p>${elenco}<button class="btn pieno" data-act="chiudiFesta">Grande!</button>`, suono:"fanfara" });
+  else if (righe.length) pagine.push({ html:`<h2 class="d titolo-festa" style="font-size:32px">Novità per te</h2>${elenco}<button class="btn pieno" data-act="chiudiFesta">Grande!</button>`, suono:"stelle" });
+  // all'apertura il telefono non lascia suonare finché non lo tocchi: prima un "Vediamo!"
+  if (SUONI.acceso() && !SUONI.pronto()) {
+    const n = t => nuoveStelle.filter(e => e.tipo === t).length;
+    const voci = [[n("stella"), "stella", "stelle"], [n("mossa"), "mossa", "mosse"], [n("greencard"), "Green Card", "Green Card"], [nuoviGG.length, "GG", "GG"], [tappe.reduce((x, tp) => x + tp.premi.length, 0), "premio", "premi"]]
+      .filter(x => x[0]).map(([q, uno, tanti]) => `<span>${q} ${q === 1 ? uno : tanti}</span>`).join("");
+    pagine.unshift({ html:`<h2 class="d titolo-festa" style="font-size:34px">Ci sono novità!</h2><div class="riassunto">${voci}</div><button class="btn pieno" data-act="chiudiFesta">Vediamo!</button>` });
+  }
+  pagine.forEach(p => festa(p.html, p.suono));
 }
+
+/* ---------- trofei che contano, +N che vola, boss colpito ---------- */
+const V = { trofei:null, raf:0 };
+function numTrofei(n) { const b = $("numT"); if (b) b.textContent = n; const h = $("hudT"); if (h) h.querySelector("b").textContent = n; }
+function bersaglioTrofei() {
+  const p = $("pillT"); if (!p) return null;
+  const r = p.getBoundingClientRect();
+  if (r.bottom > 0 && r.top < innerHeight) return p;
+  let h = $("hudT");          // la testata non si vede: compare una pillola in alto per il tempo del conteggio
+  if (!h) { h = document.createElement("div"); h.id = "hudT"; h.className = "pill-trofei hud"; h.innerHTML = `${coppa(26)}<b class="num">${V.trofei}</b>`; document.body.appendChild(h); }
+  return h;
+}
+function volaPiu(n, verso) {
+  return new Promise(fine => {
+    if (!verso || riduci() || !verso.animate) return fine();
+    const r = verso.getBoundingClientRect(), x0 = innerWidth / 2, y0 = innerHeight * .42, dx = r.left + r.width / 2 - x0, dy = r.top + r.height / 2 - y0;
+    const el = document.createElement("div"); el.className = "vola"; el.innerHTML = `+${n} ${coppa(30)}`; document.body.appendChild(el);
+    const base = `translate(${x0}px,${y0}px) translate(-50%,-50%)`;
+    const a = el.animate([
+      { transform:`${base} scale(.3)`, opacity:0 },
+      { transform:`${base} scale(1.3)`, opacity:1, offset:.22 },
+      { transform:`${base} scale(1)`, opacity:1, offset:.5 },
+      { transform:`translate(${x0 + dx}px,${y0 + dy}px) translate(-50%,-50%) scale(.45)`, opacity:.85 }
+    ], { duration:1100, easing:"ease-in-out" });
+    let fatto = false; const chiudi = () => { if (fatto) return; fatto = true; el.remove(); fine(); };
+    a.onfinish = chiudi; setTimeout(chiudi, 1500);
+  });
+}
+async function contaTrofei() {
+  if (!S.c || S.modo !== "ragazzo") return;
+  if (V.trofei == null || S.c.trofei <= V.trofei || riduci()) {
+    const su = V.trofei != null && S.c.trofei > V.trofei;
+    V.trofei = S.c.trofei; numTrofei(V.trofei); if (su) SUONI.suona("moneta"); return;
+  }
+  if ($("festa").innerHTML || V.conta) return;           // prima si chiude la festa
+  V.conta = true;
+  const da = V.trofei, a = S.c.trofei, verso = bersaglioTrofei();
+  await volaPiu(a - da, verso);
+  const dur = Math.min(1500, 600 + (a - da) * 10), t0 = performance.now(); let ultimo = -1;
+  await new Promise(fine => {
+    const passo = ora => {
+      const k = Math.min(1, (ora - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+      V.trofei = Math.round(da + (a - da) * e); numTrofei(V.trofei);
+      const tick = Math.floor(k * 10); if (tick !== ultimo && k < 1) { ultimo = tick; SUONI.suona("tic", tick); }
+      if (k < 1) V.raf = requestAnimationFrame(passo); else fine();
+    };
+    V.raf = requestAnimationFrame(passo);
+  });
+  V.trofei = a; numTrofei(a); SUONI.suona("moneta");
+  const p = $("hudT") || $("pillT"); if (p) { p.classList.remove("gonfia"); void p.offsetWidth; p.classList.add("gonfia"); }
+  setTimeout(() => { const h = $("hudT"); if (h) h.remove(); }, 1400);
+  V.conta = false;
+  if (S.c.trofei > V.trofei) contaTrofei();
+}
+function animaBoss() {
+  const D = S.io; if (!D || !D.boss || S.modo !== "ragazzo" || S.tab !== "squadra") return;
+  const k = "ngu:boss:" + D.io.id, v = lgetJ(k, null), ora = { mese:D.boss.mese, danni:D.boss.danni };
+  lset(k, JSON.stringify(ora));
+  if (!v || v.mese !== ora.mese || ora.danni <= v.danni || D.boss.sconfitto || riduci()) return;
+  const bar = document.querySelector(".energia i"), fig = document.querySelector(".boss svg"), box = document.querySelector(".boss");
+  if (!bar || !fig) return;
+  const q = d => Math.round(Math.max(0, 1 - d / D.boss.hp) * 100);
+  bar.style.transition = "none"; bar.style.width = q(v.danni) + "%"; void bar.offsetWidth;
+  setTimeout(() => {
+    bar.style.transition = "width 1s cubic-bezier(.3,.8,.3,1)"; bar.style.width = q(ora.danni) + "%";
+    fig.classList.remove("colpito"); void fig.getBoundingClientRect(); fig.classList.add("colpito");
+    const n = document.createElement("div"); n.className = "danno"; n.textContent = "−" + (ora.danni - v.danni); box.appendChild(n); setTimeout(() => n.remove(), 1400);
+    SUONI.suona("colpo");
+  }, 450);
+}
+document.addEventListener("animationend", e => {
+  if (e.animationName === "salta") { const f = e.target.closest(".salta"); if (f) f.classList.remove("salta"); }
+  if (e.animationName === "colpito") e.target.classList.remove("colpito");
+});
 
 /* ---------------------------------------------------------------------
    AZIONI
@@ -1419,8 +1839,17 @@ async function condividi(testo, titolo) {
 const ACT = {
   velo:(d, el, ev) => { if (ev.target === el) chiudi(); },
   chiudi:() => chiudi(),
-  chiudiFesta:(d, el, ev) => { if (ev.target === el || el.tagName === "BUTTON") $("festa").innerHTML = ""; },
-  tab:d => { S.tab = d.k; render(); window.scrollTo(0, 0); },
+  chiudiFesta:(d, el, ev) => { if (ev.target === el || el.tagName === "BUTTON") prossimaFesta(); },
+  tab:d => { const nuovo = S.tab !== d.k; S.tab = d.k; S.anima = nuovo; render(); window.scrollTo(0, 0); if (nuovo) SUONI.suona("tocco"); animaBoss(); },
+  suoni:() => { const on = SUONI.commuta(); render(); if (on) SUONI.suona("pop"); toast(on ? "Suoni accesi" : "Suoni spenti"); },
+  salta:(d, el) => { el.classList.remove("salta"); void el.getBoundingClientRect(); el.classList.add("salta"); SUONI.suona("boing"); },
+  missione:() => {
+    const mis = areaMissione(S.io.ora.settimana);
+    apri(() => `<button class="chiudi" data-act="chiudi" aria-label="Chiudi">✕</button><span class="area-chip" style="background:${mis.col}">Missione della settimana</span>
+      <h2 style="font-size:34px;margin:8px 0">${mis.missione}</h2><p style="font-size:18px">${esc(mis.testo)}</p>
+      <div class="data-presa" style="border-color:${mis.col};background:#fff">Questa settimana una stella <b>${mis.nome.toLowerCase()}</b> del mister vale <b>${T.stella + T.missione} trofei</b> invece di ${T.stella}.</div>
+      <p class="fioco piccolo" style="margin:10px 0 0">Ogni lunedì la missione cambia: impegno, coraggio, rispetto, squadra.</p>`);
+  },
   stab:d => { S.stab = d.k; S.errore = ""; render(); window.scrollTo(0, 0); if (d.k === "squadra") disegnaRiep(); },
   vaiLogin:() => { S.modo = "login"; S.errore = ""; render(); },
   vaiBenvenuto:() => { S.modo = "benvenuto"; S.errore = ""; render(); },
@@ -1459,6 +1888,7 @@ const ACT = {
       S.token = r.token; lset("ngu:token:" + SQ, r.token);
       history.replaceState(null, "", `${baseUrl()}?s=${encodeURIComponent(SQ)}&t=${r.token}`);
       S.carica = false; S.errore = ""; S.iscr = null;
+      SUONI.suona("salva");
       await caricaRagazzo(); controllaAttesa();
     } catch (e) { S.carica = false; S.errore = msgErr(e.message); if (e.message === "preso") { S.iscr.passo = 1; } render(); }
   },
@@ -1466,13 +1896,14 @@ const ACT = {
   av:d => {
     const tgt = S.iscr && S.modo === "iscrizione" ? S.iscr.av : S.edit.av;
     tgt[d.t] = (d.t === "pelle" || d.t === "colore") ? +d.k : d.k;
+    SUONI.suona("pop");
     if (S.modo === "iscrizione") { render(); } else rifai();
   },
   personalizza:() => fPersonalizza(),
   salvaAvatar:async () => {
     const n = val("numEdit");
     if (n && !/^\d{1,2}$/.test(n)) { toast(msgErr("numero")); return; }
-    try { await azioneRagazzo("avatar", { avatar:S.edit.av, numero:n ? +n : null }); chiudi(); toast("Fighter salvato"); await caricaRagazzo(); }
+    try { await azioneRagazzo("avatar", { avatar:S.edit.av, numero:n ? +n : null }); chiudi(); SUONI.suona("salva"); toast("Fighter salvato"); await caricaRagazzo(); }
     catch (e) { toast(msgErr(e.message)); }
   },
   // sfide
@@ -1480,34 +1911,40 @@ const ACT = {
   timer30:() => {
     if (timer) { fermaTimer(); rifai(); return; }
     S.fs.valore = val("valSfida");
-    let v = 30; timer = { k:"trenta", v, id:setInterval(() => { v--; timer.v = v; const t = $("tm"); if (t) t.textContent = v; if (v <= 0) { fermaTimer(); bip(); rifai(); const i = $("valSfida"); if (i) i.focus(); } }, 1000) };
+    SUONI.suona("via");
+    let v = 30; timer = { k:"trenta", v, id:setInterval(() => { v--; timer.v = v; const t = $("tm"); if (t) t.textContent = v; if (v > 0 && v <= 3) SUONI.suona("conto"); if (v <= 0) { fermaTimer(); SUONI.suona("fischio"); rifai(); const i = $("valSfida"); if (i) i.focus(); } }, 1000) };
     rifai();
   },
   crono:() => {
-    if (timer) { const s = (Date.now() - timer.t0) / 1000; fermaTimer(); S.fs.valore = s.toFixed(1); rifai(); return; }
+    if (timer) { const s = (Date.now() - timer.t0) / 1000; fermaTimer(); S.fs.valore = s.toFixed(1); SUONI.suona("fischio"); rifai(); return; }
+    SUONI.suona("via");
     const t0 = Date.now(); timer = { k:"crono", t0, v:"0,0", id:setInterval(() => { timer.v = ((Date.now() - t0) / 1000).toFixed(1).replace(".", ","); const t = $("tm"); if (t) t.textContent = timer.v; }, 100) };
     rifai();
   },
   salvaSfida:async () => {
     const F = S.fs, v = val("valSfida").replace(",", "."), pin = val("pinSfida");
     F.valore = val("valSfida");
-    if (!/^\d{1,4}(\.\d{1,2})?$/.test(v) || +v <= 0) { F.err = msgErr("valore"); rifai(); return; }
-    if (!/^\d{4}$/.test(pin)) { F.err = "Serve il PIN del genitore (4 cifre)."; rifai(); return; }
+    if (!/^\d{1,4}(\.\d{1,2})?$/.test(v) || +v <= 0) { F.err = msgErr("valore"); SUONI.suona("errore"); rifai(); return; }
+    if (!/^\d{4}$/.test(pin)) { F.err = "Serve il PIN del genitore (4 cifre)."; SUONI.suona("errore"); rifai(); return; }
     const prima = S.c.record[F.k];
+    const giaFatte = S.io.eventi.filter(e => e.tipo === "sfida" && e.settimana === S.io.ora.settimana).length;
     try {
       await azioneRagazzo("sfida", { sfida:F.k, valore:String(+(+v).toFixed(2)), pin });
       const s = SFIDA[F.k], rec = prima != null && (s.verso > 0 ? +v > prima : +v < prima);
-      chiudi(); await caricaRagazzo();
-      toast(rec ? "Nuovo record! +" + (T.sfida + T.record) + " trofei" : "Sfida confermata");
+      const guadagno = (giaFatte < T.sfidaMax ? T.sfida : 0) + (rec ? T.record : 0);
+      chiudi();
+      if (rec) festa(festaRecord(s, +v, prima, guadagno), "record");
+      await caricaRagazzo();
+      if (!rec) toast(guadagno ? "Sfida confermata!" : `Sfida confermata. I trofei delle sfide di questa settimana li hai già presi tutti: il record vale sempre.`);
     } catch (e) {
-      F.err = e.message === "pin" ? `PIN sbagliato. Tentativi rimasti: ${e.r && e.r.tentativi != null ? e.r.tentativi : "pochi"}.` : msgErr(e.message); rifai();
+      F.err = e.message === "pin" ? `PIN sbagliato. Tentativi rimasti: ${e.r && e.r.tentativi != null ? e.r.tentativi : "pochi"}.` : msgErr(e.message); SUONI.suona("errore"); rifai();
     }
   },
-  obiettivo:async d => { try { await azioneRagazzo("obiettivo", { obiettivo:d.k }); await caricaRagazzo(); } catch (e) { toast(msgErr(e.message)); } },
+  obiettivo:async d => { try { await azioneRagazzo("obiettivo", { obiettivo:d.k }); SUONI.suona("pop"); await caricaRagazzo(); } catch (e) { toast(msgErr(e.message)); } },
   cambiaObiettivo:async () => { S.io.eventi = S.io.eventi.filter(e => !(e.tipo === "obiettivo" && e.settimana === S.io.ora.settimana)); render(); },
   autoval:async d => { try { await azioneRagazzo("autovalutazione", { esito:d.k }); await caricaRagazzo(); toast("+" + T.autoval + " trofei per esserti autovalutato"); } catch (e) { toast(msgErr(e.message)); } },
   gg:d => fGG(d.id),
-  mandaGG:async d => { try { await azioneRagazzo("gg", { a:d.id, frase:+d.f }); chiudi(); await caricaRagazzo(); toast("GG mandato!"); } catch (e) { toast(msgErr(e.message)); } },
+  mandaGG:async d => { try { await azioneRagazzo("gg", { a:d.id, frase:+d.f }); chiudi(); SUONI.suona("gg"); toast("GG mandato!"); await caricaRagazzo(); } catch (e) { toast(msgErr(e.message)); } },
   mossa:d => fMossa(d.k),
   // staff
   attiva:async () => { try { await azioneStaff("attiva"); S.stab = "squadra"; await caricaStaff(); } catch (e) { S.errore = msgErr(e.message); render(); } },
@@ -1590,7 +2027,11 @@ document.addEventListener("click", ev => {
   if (el.dataset.act !== "velo" && el.dataset.act !== "chiudiFesta") ev.stopPropagation();
   f(el.dataset, el, ev);
 });
-document.addEventListener("keydown", ev => { if (ev.key === "Escape" && S.foglio) chiudi(); });
+document.addEventListener("keydown", ev => {
+  if (ev.key === "Escape" && S.foglio) chiudi();
+  const el = ev.target.closest && ev.target.closest('[role="button"][data-act]');
+  if (el && (ev.key === "Enter" || ev.key === " ")) { ev.preventDefault(); el.click(); }
+});
 
 async function avviaIscrizione(codice) {
   S.modo = "iscrizione"; S.errore = "";

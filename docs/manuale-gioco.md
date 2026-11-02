@@ -1,6 +1,7 @@
 # Gioco NEVER GIVE UP — manuale tecnico
 
-Versione 1, 1 novembre 2026. Online dal 2 novembre 2026. Da leggere prima di ogni modifica al gioco.
+Versione 2, 2 novembre 2026 (grafica, movimento e suoni). Versione 1 online dal 2 novembre 2026.
+Da leggere prima di ogni modifica al gioco.
 Questa è la copia di riferimento: sta nel repository accanto al codice e si aggiorna nella
 stessa pull request che cambia il gioco.
 
@@ -14,6 +15,11 @@ Contiene: card del Fighter con 8 statistiche, strada dei trofei con sblocchi, sf
 confermate dal genitore con il PIN, obiettivo della settimana con autovalutazione, mosse
 speciali sbloccate dal mister, fantasquadra sorteggiata ogni lunedì, boss del mese,
 bacheca, combine, riepilogo settimanale per il gruppo dei genitori.
+
+Dalla versione 2 lo stile è più vicino ai giochi che i ragazzi conoscono (tipo Brawl Stars):
+Fighter con ombre e tacchetti che respira e salta, disegni per sfide e mosse, feste a schermo
+intero, trofei che contano, boss che trema, suoni generati dal telefono. Vedi «Grafica,
+movimento e suoni».
 
 ## File
 
@@ -115,6 +121,36 @@ ragazzi in squadra da almeno 7 giorni hanno fatto almeno una cosa nel mese.
 
 **Settimana e mese** sono calcolati sull'ora di Roma.
 
+## Grafica, movimento e suoni (versione 2)
+
+Tutto è disegnato nel codice (SVG e CSS): nessuna immagine o file audio da scaricare.
+
+| Cosa | Dove in `gioco.html` | Come funziona |
+|---|---|---|
+| Fighter | `fighterSVG()` | contorni spessi, luce a sinistra e ombra a destra (ritagli con id unici), scarpe con tacchetti. Facce: Sveglio, Felice, Grinta, Tranquillo, Furbo, Urlo |
+| Fighter vivo | CSS `.corpo`, `.occhi-ap` | respira, sbatte gli occhi; toccato nella pagina Fighter salta (`data-act="salta"`) |
+| Disegni di sfide e mosse | `DIS_SFIDA`, `DIS_MOSSA`, `disegno()` | schema con palla, piedi, frecce. Nelle tessere è fermo; nel foglio la palla corre lungo la freccia (`animateMotion`) |
+| Trofei che contano | `contaTrofei()`, `volaPiu()` | quando i trofei salgono, «+N» vola sulla coppa in alto e il numero conta. Se la testata non si vede compare una pillola fissa in alto finché finisce |
+| Feste | `festa()`, `prossimaFesta()` | una dopo l'altra: nuovo grado, «Sbloccato!» con i premi disegnati, «Novità per te», «Nuovo record!» |
+| «Vediamo!» | `novita()` | all'apertura il telefono non lascia suonare finché non lo tocchi: prima compare il riassunto («3 stelle · 1 premio») e il tasto Vediamo! |
+| Boss | `animaBoss()` | galleggia; se dall'ultima visita ha perso energia, la barra scende, il boss trema e compare il danno («−5») |
+| Schede che entrano | classe `.entra` su `#app` | solo quando si cambia pagina, non a ogni aggiornamento |
+| Suoni | `SUONI` | 16 suoni sintetizzati (Web Audio): tocco, pop, conteggio, moneta, stelle, fanfara, record, grado, colpo al boss, boing, fischio di inizio e fine del timer, ultimi 3 secondi, errore, GG, salvato |
+
+**Regole dei suoni**
+- Solo per i ragazzi (iscrizione, attesa, gioco). Mister e dirigente non sentono niente.
+- L'altoparlante nella testata li spegne e li riaccende; la scelta resta sul telefono
+  (`localStorage` `ngu:suoni`).
+- Su iPhone tacciono con il tasto silenzioso, perché Safari tratta l'audio delle pagine come
+  «ambient» ([WebKit](https://bugs.webkit.org/show_bug.cgi?id=237322)).
+- Volume generale e limitatore in `catena()`: nessun suono può distorcere.
+
+**Movimento ridotto**: chi ha attivato «riduci movimento» nel telefono vede tutto fermo
+(nessuna animazione, nessun volo, numeri aggiornati subito). I suoni restano, se accesi.
+
+**Personalizza**: l'anteprima del Fighter resta in alto mentre si scorrono le scelte, e il
+foglio non torna più in cima a ogni tocco.
+
 ## Cosa succede da solo
 
 Nessun programma pianificato da mantenere: è tutto calcolato quando qualcuno apre l'app.
@@ -128,6 +164,9 @@ Il ragazzo in attesa entra da solo appena approvato: la pagina si aggiorna ogni 
 - Niente classifica individuale, niente casse a sorpresa, niente serie da non perdere,
   nessuna notifica ai ragazzi.
 - Il soprannome lo sceglie il ragazzo all'iscrizione; dopo l'approvazione lo cambia solo il dirigente.
+- Le feste mostrano solo cose già guadagnate e sempre uguali per tutti: il «Vediamo!» non è
+  una cassa a sorpresa. Animazioni e suoni festeggiano quello che il ragazzo ha fatto, non lo
+  spingono a tornare.
 - Il dirigente non può dare stelle o Green Card al proprio figlio (impostazione "Tuo figlio"):
   lo blocca il database, non solo l'app.
 - **Elimina** cancella il ragazzo e tutti i suoi dati, compresi i GG ricevuti.
@@ -145,6 +184,11 @@ possa rieseguire senza perdere dati.
 - **Frasi delle stelle, mosse, sfide, obiettivi, frasi GG, strada, boss**: catalogo in cima
   allo script di `gioco.html`. Se cambi le *chiavi* di mosse, sfide, obiettivi, esiti o prove
   (non i nomi) vanno cambiate anche in `gioco_ammessi()` nello SQL. Massimo 10 frasi per area.
+- **Nuova sfida o nuova mossa**: oltre al catalogo e a `gioco_ammessi()`, aggiungi il suo
+  disegno in `DIS_SFIDA` o `DIS_MOSSA`. Senza, compare solo una palla e il collaudo lo segnala.
+- **Facce del Fighter**: elenco `OCCHI` e il `switch` delle facce in `fighterSVG()`. Le chiavi
+  dell'avatar non sono controllate dallo SQL: niente da rilanciare.
+- **Suoni**: elenco `LIB` dentro `SUONI`. Dopo una modifica ascolta i file del collaudo.
 - **Valori dei trofei**: costante `T` in `gioco.html` e `gioco_danni()` nello SQL, insieme.
 - **Server**: le righe `CONFIG` in cima a `gioco.html`, le stesse di `index.html`.
 
@@ -156,7 +200,9 @@ Si lancia dalla cartella `test/`:
 cd test
 npm install
 npm test        # database: 72 controlli, deve finire senza righe FALLITO
-npm run e2e     # app su telefono simulato: 29 schermate in test/shots/, "ERRORI: nessuno"
+npm run e2e     # app su telefono simulato: 38 schermate + l'immagine esportata in test/shots/,
+                # nessuna riga FALLITO, "ERRORI: nessuno"
+npm run anteprima   # facoltativo: sei Fighter diversi in test/shots/anteprima-fighter.png
 ```
 
 - **Database** (`test-sql.mjs`): carica `sql/supabase-gioco.sql` in PostgreSQL 16 (PGlite)
@@ -166,15 +212,26 @@ npm run e2e     # app su telefono simulato: 29 schermate in test/shots/, "ERRORI
   Supabase è finto ma esegue le stesse funzioni SQL. Iscrizione, attesa e ingresso
   automatico, stelle, mosse, combine, sfide con timer e PIN, GG, personalizzazione,
   riepilogo e messaggi. Le schermate vanno guardate, non solo contate.
+  Dalla versione 2 controlla anche: le tre feste all'apertura (Vediamo, grado, sbloccato), il
+  contatore che arriva ai trofei veri, il record a schermo intero, il boss colpito dopo un GG,
+  che ogni sfida e mossa abbia il suo disegno, che con l'altoparlante spento non parta nessun
+  suono (conta gli oscillatori creati), che il mister non senta suoni, che con «riduci
+  movimento» tutto stia fermo.
+- **Suoni**: il collaudo li registra in `test/shots/suoni/` (uno per suono più
+  `tutti-i-suoni.wav`) e controlla che siano udibili e senza distorsione. Vanno ascoltati.
 - Serve Playwright con Chromium già installato. Se manca e non si può installare, il
   collaudo dell'app non è fatto: va detto, non dato per buono.
 - L'immagine del riepilogo è lo stesso canvas che si vede a schermo.
 
-Ultimo collaudo: 2 novembre 2026, dalla cartella `test/` del repository. 72 controlli sul
-database superati, 29 schermate, zero errori in console.
+Ultimo collaudo: 2 novembre 2026 (versione 2), dalla cartella `test/` del repository. 72
+controlli sul database superati; app: 14 controlli superati, 38 schermate più l'immagine
+esportata, 16 suoni registrati, zero errori in console.
 
 ## Lasciato fuori dalla versione 1 (di proposito)
 
 - Conteggio di una variabile in partita (recuperi, rientri…): previsto per la versione 2.
 - Collegamento dall'app partite al gioco: `index.html` non è stato modificato.
 - Notifiche push: il gioco non ne manda.
+- Sfide a casa, mosse e prove del combine create o modificate dal mister dall'app: chiesto da
+  Filippo il 2 novembre 2026, rimandato a dopo il primo periodo di uso. Servirà una tabella
+  nuova, il controllo in `gioco_ammessi()` da adattare e una pagina nell'app del mister.
