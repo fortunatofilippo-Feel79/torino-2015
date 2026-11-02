@@ -1,0 +1,15 @@
+{
+  "name": "torino-2015-test-gioco",
+  "private": true,
+  "description": "Collaudo del gioco NEVER GIVE UP: database (PGlite) e app su telefono simulato (Playwright)",
+  "type": "module",
+  "scripts": {
+    "test": "node test-sql.mjs",
+    "e2e": "node e2e.mjs"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.2.17",
+    "@fontsource/lilita-one": "^5.0.8",
+    "@fontsource/nunito": "^5.0.18"
+  }
+}
