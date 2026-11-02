@@ -232,3 +232,6 @@ esportata, 16 suoni registrati, zero errori in console.
 - Conteggio di una variabile in partita (recuperi, rientri…): previsto per la versione 2.
 - Collegamento dall'app partite al gioco: `index.html` non è stato modificato.
 - Notifiche push: il gioco non ne manda.
+- Sfide a casa, mosse e prove del combine create o modificate dal mister dall'app: chiesto da
+  Filippo il 2 novembre 2026, rimandato a dopo il primo periodo di uso. Servirà una tabella
+  nuova, il controllo in `gioco_ammessi()` da adattare e una pagina nell'app del mister.
