@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "test": "node test-sql.mjs",
-    "e2e": "node e2e.mjs"
+    "e2e": "node e2e.mjs",
+    "anteprima": "node anteprima.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.2.17",
