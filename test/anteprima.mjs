@@ -1,5 +1,5 @@
 // Anteprima dei disegni senza database: utile mentre si disegna il Fighter.
-// Uso: npm run anteprima → test/shots/anteprima-fighter.png (sei Fighter diversi e le loro miniature).
+// Uso: npm run anteprima → test/shots/anteprima-fighter.png (nove Fighter diversi e le loro miniature).
 // Con un'espressione JavaScript che restituisce HTML disegna anche quella in test/shots/anteprima-extra.png, es.:
 //   node anteprima.mjs '`<div class="disegno">${disegno("slalom", "sfida")}</div>`'
 import { avvia, BASE } from './browser.mjs';
@@ -17,9 +17,12 @@ const pezzi = await page.evaluate(() => {
     { pelle:0, capelli:'cresta', colore:5, occhi:'normali', maglia:'portiere', acc:'fascetta' },
     { pelle:3, capelli:'rasati', colore:0, occhi:'tranquilli', maglia:'terza', scarpe:'blu', acc:'polsini' },
     { pelle:1, capelli:'lunghi', colore:3, occhi:'furbo', maglia:'storica', scarpe:'oro' },
-    { pelle:5, capelli:'corti', colore:0, occhi:'urlo', maglia:'leggenda', scarpe:'bianche' }
+    { pelle:5, capelli:'corti', colore:0, occhi:'urlo', maglia:'leggenda', scarpe:'bianche' },
+    { pelle:2, capelli:'ciuffo', colore:2, occhi:'felici', scarpe:'arancio', acc:'capitano' },
+    { pelle:1, capelli:'corti', colore:0, occhi:'grinta', maglia:'portiere', scarpe:'viola', acc:'capitano' },
+    { pelle:4, capelli:'rasati', colore:0, occhi:'normali', maglia:'trasferta', scarpe:'argento', acc:'scaldacollo' }
   ];
-  const fig = av.map((a, i) => `<div style="background:#7a241f;border:3px solid #1E0B0A;border-radius:16px;padding:6px">${fighterSVG(a, { numero: [10, 9, 1, 4, 5, 11][i] })}</div>`).join('');
+  const fig = av.map((a, i) => `<div style="background:#7a241f;border:3px solid #1E0B0A;border-radius:16px;padding:6px">${fighterSVG(a, { numero: [10, 9, 1, 4, 5, 11, 8, 12, 6][i] })}</div>`).join('');
   const mini = av.map(a => `<div class="mini g">${fighterSVG(a, { busto:true })}</div>`).join('');
   return `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:8px">${fig}</div><div class="riga wrap" style="padding:8px">${mini}</div>`;
 });

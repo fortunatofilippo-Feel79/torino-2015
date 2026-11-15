@@ -120,6 +120,8 @@
   .sf-stadio { background:radial-gradient(circle at 15% 0%,rgba(255,255,220,.55),rgba(255,255,220,0) 35%),radial-gradient(circle at 85% 0%,rgba(255,255,220,.55),rgba(255,255,220,0) 35%),linear-gradient(#1b2b5c,#14301d 78%,#1d6b39 78%); }
   .sf-tramonto { background:linear-gradient(#ff8a3d,#ff4f5e 55%,#7b2b6b); }
   .sf-curva { background:radial-gradient(circle,rgba(255,255,255,.22) 2px,transparent 2.5px) 0 0/14px 14px, linear-gradient(#922F29,#5e1a16); }
+  .sf-campo { background:repeating-linear-gradient(90deg,#3aa55c 0 30px,#43b868 30px 60px); }
+  .sf-neve { background:radial-gradient(circle,#fff 1.6px,transparent 2.6px) 0 0/24px 24px, radial-gradient(circle,#fff 1.1px,transparent 2.1px) 12px 12px/24px 24px, linear-gradient(#4f9fe0,#bfe3ff); }
   .sf-leggenda { background:repeating-conic-gradient(from 0deg at 50% 45%,#ffd85a 0 10deg,#ffb92e 10deg 20deg); }
   /* cornici */
   .cr-base { border-color:var(--ink); }
@@ -349,7 +351,58 @@
   .riassunto { display:flex; flex-wrap:wrap; justify-content:center; gap:8px; margin:12px 0 18px; }
   .riassunto span { background:var(--pannello-2); border:3px solid var(--ink); border-radius:12px; padding:6px 12px; font-family:var(--display); font-size:19px; }
 
+  /* =====================================================================
+     VERSIONE 3: il Fighter fa mosse ed esultanze, medaglie, traguardi, boss a fasi
+     ===================================================================== */
+  /* punti attorno a cui girano corpo, braccia e gambe del Fighter */
+  svg .corpo { transform-box:view-box; transform-origin:100px 238px; }
+  svg .br-s { transform-box:view-box; transform-origin:58px 132px; } svg .br-d { transform-box:view-box; transform-origin:142px 132px; }
+  svg .ga-s { transform-box:view-box; transform-origin:87px 176px; } svg .ga-d { transform-box:view-box; transform-origin:113px 176px; }
+  svg .ombra { transform-box:fill-box; transform-origin:center; }
+  .figura svg, .campetto .att svg, .campetto .pal svg { overflow:visible; }
+  /* campetto dove il Fighter fa la mossa */
+  .campetto { position:relative; height:206px; border:3px solid var(--ink); border-radius:18px; overflow:hidden; margin:0 0 12px; cursor:pointer; box-shadow:0 4px 0 var(--ink);
+           background:linear-gradient(#c9ecff,#8fd3f4) top/100% 44% no-repeat, repeating-linear-gradient(90deg,#43b868 0 34px,#3aa55c 34px 68px); }
+  .campetto::after { content:""; position:absolute; left:0; right:0; top:44%; height:4px; background:rgba(255,255,255,.8); }
+  .campetto .att { position:absolute; left:50%; bottom:20px; width:124px; margin-left:-62px; transform-origin:50% 100%; z-index:1; }
+  .campetto .att svg { width:100%; height:auto; display:block; }
+  .campetto .pal { position:absolute; left:50%; bottom:6px; width:30px; height:30px; margin-left:-15px; z-index:2; }
+  .campetto .pal svg { width:100%; height:100%; display:block; }
+  /* medaglie delle sfide */
+  .tessera .med { position:absolute; top:15px; right:8px; display:flex; }
+  .tessera .med svg { margin-left:-3px; }
+  .medaglie { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:6px 0 8px; text-align:center; }
+  .medaglie div { border:3px solid var(--ink); border-radius:14px; padding:8px 4px 6px; background:#fff; color:#7a5a52; font-size:13px; line-height:1.2; }
+  .medaglie div.presa { background:#fff3cf; color:var(--ink); box-shadow:0 3px 0 var(--ink); }
+  .medaglie b { display:block; font-family:var(--display); font-weight:400; font-size:16px; color:var(--ink); }
+  .medagliona { margin:8px 0 6px; animation:timbro .6s .3s cubic-bezier(.25,1.6,.5,1) both; }
+  .grafico { border:3px solid var(--ink); border-radius:16px; padding:10px 12px 8px; background:#fff; margin:0 0 4px; }
+  .grafico h3 { color:var(--ink); font-size:16px; margin:0 0 2px; }
+  .grafico svg { width:100%; height:auto; display:block; }
+  /* prossimi traguardi */
+  .trag { display:flex; align-items:center; gap:10px; width:100%; text-align:left; background:var(--pannello-2); border:3px solid var(--ink); border-radius:14px; padding:8px 10px;
+          margin:0 0 8px; color:var(--gesso); cursor:pointer; box-shadow:0 3px 0 var(--ink); font-size:14.5px; font-weight:800; line-height:1.25; }
+  .trag:last-child { margin-bottom:0; }
+  .trag:active { transform:translateY(2px); box-shadow:0 1px 0 var(--ink); }
+  .trag .ic { flex:none; width:30px; height:30px; display:grid; place-items:center; color:var(--oro); }
+  .trag .ic svg { width:26px; height:26px; }
+  .trag .ic .pallino { font-size:13px; }
+  .trag b { color:var(--oro); }
+  .trag .va { margin-left:auto; font-family:var(--display); font-size:24px; line-height:1; color:var(--dim); }
+  /* boss: fase e tacche a un quarto, metà, tre quarti */
+  .fase { display:inline-block; font-family:var(--display); font-size:15px; padding:3px 10px; border-radius:10px; border:3px solid var(--ink); color:var(--ink); background:var(--gesso); margin:2px 0 4px; }
+  .fase.f1 { background:#FFD23A; } .fase.f2 { background:#FF8A3D; } .fase.f3 { background:#FF4F5E; color:#fff; }
+  .energia b { position:absolute; top:0; bottom:0; width:3px; margin-left:-1.5px; background:rgba(30,11,10,.5); }
+  .boss .tuo b { color:var(--oro); }
+  .boss-festa svg { width:170px; height:auto; }
+  .elenco-festa { background:var(--pannello-2); border:3px solid var(--ink); border-radius:16px; padding:4px 12px; margin:10px 0 14px; }
+  /* avviso piccolo: una statistica è salita di livello */
+  #avvisi { position:fixed; top:calc(env(safe-area-inset-top) + 10px); left:50%; transform:translateX(-50%); z-index:66; display:flex; flex-direction:column; gap:6px; align-items:center; pointer-events:none; width:max-content; max-width:92vw; }
+  .salita { background:var(--ink); color:#fff; border-radius:999px; padding:6px 14px 6px 6px; display:flex; gap:8px; align-items:center; font-size:14.5px; box-shadow:0 4px 0 rgba(0,0,0,.35); animation:hud .25s ease-out; }
+  .salita i { flex:none; width:26px; height:26px; border-radius:50%; display:grid; place-items:center; font-style:normal; font-size:12px; color:var(--ink); border:2px solid #000; }
+
   @media (prefers-reduced-motion: reduce) {
+    .medagliona, .salita { animation:none !important; }
     .eroe .corpo, .festa .corpo, .occhi-ap, .boss svg, .festa .raggi::before, .app.entra > *, .app.entra .barra i, .app.entra .prog i,
     .festa .scatola, .festa .titolo-festa, .festa .gigante, .premio, .figura.salta .corpo, .figura.salta .ombra, .pill-trofei.gonfia, .pill-trofei.hud, .stemma, .danno { animation:none !important; }
   }
@@ -501,12 +554,21 @@ const KIT = {
 };
 const SCARPE = {
   nere:{ nome:"Nere", c:"#1E1A1A" }, bianche:{ nome:"Bianche", c:"#F7F7F7" }, rosse:{ nome:"Rosso fuoco", c:"#FF3B30" },
-  blu:{ nome:"Blu elettrico", c:"#2F7BFF" }, oro:{ nome:"Oro", c:"#FFC531" }, fluo:{ nome:"Fluo", c:"#B6FF2E" }
+  blu:{ nome:"Blu elettrico", c:"#2F7BFF" }, oro:{ nome:"Oro", c:"#FFC531" }, fluo:{ nome:"Fluo", c:"#B6FF2E" },
+  arancio:{ nome:"Arancio", c:"#FF8A1F" }, viola:{ nome:"Viola", c:"#9B5CFF" }, argento:{ nome:"Argento", c:"#C9D3DC" }
 };
-const ACCESSORI = { nessuno:{ nome:"Nessuno" }, fascetta:{ nome:"Fascetta" }, polsini:{ nome:"Polsini" } };
-const SFONDI = { spogliatoio:"Spogliatoio", stadio:"Stadio di notte", tramonto:"Tramonto", curva:"Curva granata", leggenda:"Leggenda" };
+const ACCESSORI = { nessuno:{ nome:"Nessuno" }, fascetta:{ nome:"Fascetta" }, polsini:{ nome:"Polsini" }, capitano:{ nome:"Fascia da capitano" }, scaldacollo:{ nome:"Scaldacollo" } };
+const SFONDI = { spogliatoio:"Spogliatoio", stadio:"Stadio di notte", campo:"Campo", tramonto:"Tramonto", curva:"Curva granata", neve:"Neve", leggenda:"Leggenda" };
+// esultanze: come festeggia il Fighter quando lo tocchi e nelle feste (i movimenti sono in ES_ANIM)
+const ESULTANZE = { salto:{ nome:"Salto" }, braccia:{ nome:"Braccia al cielo" }, capriola:{ nome:"Capriola" }, aeroplano:{ nome:"Aeroplano" }, scivolata:{ nome:"Scivolata" }, trottola:{ nome:"Trottola" } };
+// medaglie delle sfide a casa: contano i giorni diversi in cui hai fatto quella sfida (costanza, non bravura)
+const MEDAGLIE = [
+  { k:"bronzo",  nome:"Bronzo",  di:"di bronzo", giorni:2,  col:"#CD7F32" },
+  { k:"argento", nome:"Argento", di:"d'argento", giorni:5,  col:"#D5DEE6" },
+  { k:"oro",     nome:"Oro",     di:"d'oro",     giorni:10, col:"#FFC531" }
+];
 const CORNICI = { base:"Base", bronzo:"Bronzo", argento:"Argento", oro:"Oro", leggenda:"Leggenda" };
-const AV_BASE = { pelle:1, capelli:"corti", colore:1, occhi:"normali", maglia:"casa", scarpe:"nere", acc:"nessuno", sfondo:"spogliatoio", cornice:"base", titolo:"", effetto:"" };
+const AV_BASE = { pelle:1, capelli:"corti", colore:1, occhi:"normali", maglia:"casa", scarpe:"nere", acc:"nessuno", sfondo:"spogliatoio", cornice:"base", titolo:"", effetto:"", esultanza:"salto" };
 
 // la strada dei trofei: cosa si sblocca e quando
 const STRADA = [
@@ -515,18 +577,31 @@ const STRADA = [
   { t:60,   premi:[["sfondo","stadio"]] },
   { t:100,  premi:[["acc","fascetta"]] },
   { t:150,  premi:[["cornice","bronzo"],["maglia","trasferta"]], grado:"fighter" },
+  { t:190,  premi:[["esultanza","braccia"]], n:3 },
   { t:225,  premi:[["scarpe","rosse"]] },
+  { t:260,  premi:[["sfondo","campo"]], n:3 },
   { t:300,  premi:[["sfondo","tramonto"]] },
+  { t:340,  premi:[["scarpe","arancio"]], n:3 },
   { t:375,  premi:[["acc","polsini"]] },
+  { t:410,  premi:[["esultanza","capriola"]], n:3 },
   { t:450,  premi:[["cornice","argento"],["maglia","terza"]], grado:"warrior" },
+  { t:500,  premi:[["acc","capitano"]], n:3 },
   { t:550,  premi:[["scarpe","blu"]] },
+  { t:600,  premi:[["esultanza","aeroplano"]], n:3 },
   { t:650,  premi:[["sfondo","curva"]] },
+  { t:725,  premi:[["scarpe","viola"]], n:3 },
   { t:800,  premi:[["scarpe","oro"]] },
+  { t:875,  premi:[["acc","scaldacollo"]], n:3 },
   { t:950,  premi:[["cornice","oro"],["maglia","storica"]], grado:"champion" },
+  { t:1025, premi:[["esultanza","scivolata"]], n:3 },
   { t:1100, premi:[["effetto","scintille"]] },
+  { t:1200, premi:[["sfondo","neve"]], n:3 },
   { t:1300, premi:[["scarpe","fluo"]] },
+  { t:1400, premi:[["esultanza","trottola"]], n:3 },
   { t:1500, premi:[["cornice","leggenda"],["maglia","leggenda"]], grado:"legend" },
+  { t:1625, premi:[["scarpe","argento"]], n:3 },
   { t:1750, premi:[["sfondo","leggenda"]] },
+  { t:1875, premi:[["titolo","Bandiera granata"]], n:3 },
   { t:2000, premi:[["titolo","Never Give Up"]] }
 ];
 const TITOLI_STAT = { impegno:"Instancabile", coraggio:"Cuor di leone", rispetto:"Signore del campo", squadra:"Il collante",
@@ -755,24 +830,26 @@ function fighterSVG(av, o = {}) {
   s += `<g class="corpo">`;
   if (!o.busto) {
     // gambe, calze, scarpe (la parte destra è in ombra)
-    s += `<rect x="77" y="172" width="20" height="34" rx="7" fill="${pelle}" ${L}/><rect x="103" y="172" width="20" height="34" rx="7" fill="${pelleO}" ${L}/>`;
-    s += `<path d="M75 194h24v26h-24z" fill="${kit.calze}" ${L}/><path d="M101 194h24v26h-24z" fill="${scurisci(kit.calze, .15)}" ${L}/>`;
-    if (kit.lacci) s += `<path d="M77 200h20M103 200h20" stroke="#fff" stroke-width="4"/>`;
+    // ogni gamba e ogni braccio è un gruppo a sé (ga-s, ga-d, br-s, br-d): così mosse ed esultanze li muovono
     const suola = scarpa === "#F7F7F7" ? "#C9C2C0" : "#F7F2EC";
-    s += `<path d="M59 228q0-15 15-15h22q9 0 9 9v7q0 8-8 8h-31q-7 0-7-9z" fill="${scarpa}" ${L}/>`;
-    s += `<path d="M141 228q0-15-15-15h-22q-9 0-9 9v7q0 8 8 8h31q7 0 7-9z" fill="${scurisci(scarpa, .12)}" ${L}/>`;
-    s += `<path d="M61 233h42M97 233h42" stroke="${suola}" stroke-width="3.5"/><path d="M66 238.5v2.5M78 238.5v2.5M90 238.5v2.5M110 238.5v2.5M122 238.5v2.5M134 238.5v2.5" stroke="${INK}" stroke-width="4.5" stroke-linecap="round"/>`;
-    s += `<path d="M67 220q9-4 19-3" fill="none" stroke="${LUCE}" stroke-width="3.5" stroke-linecap="round"/>`;
+    const tacchetti = d => `<path d="${d}" stroke="${INK}" stroke-width="4.5" stroke-linecap="round"/>`;
+    s += `<g class="ga-s"><rect x="77" y="172" width="20" height="34" rx="7" fill="${pelle}" ${L}/><path d="M75 194h24v26h-24z" fill="${kit.calze}" ${L}/>` +
+         (kit.lacci ? `<path d="M77 200h20" stroke="#fff" stroke-width="4"/>` : "") +
+         `<path d="M59 228q0-15 15-15h22q9 0 9 9v7q0 8-8 8h-31q-7 0-7-9z" fill="${scarpa}" ${L}/><path d="M61 233h42" stroke="${suola}" stroke-width="3.5"/>` +
+         tacchetti("M66 238.5v2.5M78 238.5v2.5M90 238.5v2.5") + `<path d="M67 220q9-4 19-3" fill="none" stroke="${LUCE}" stroke-width="3.5" stroke-linecap="round"/></g>`;
+    s += `<g class="ga-d"><rect x="103" y="172" width="20" height="34" rx="7" fill="${pelleO}" ${L}/><path d="M101 194h24v26h-24z" fill="${scurisci(kit.calze, .15)}" ${L}/>` +
+         (kit.lacci ? `<path d="M103 200h20" stroke="#fff" stroke-width="4"/>` : "") +
+         `<path d="M141 228q0-15-15-15h-22q-9 0-9 9v7q0 8 8 8h31q7 0 7-9z" fill="${scurisci(scarpa, .12)}" ${L}/><path d="M97 233h42" stroke="${suola}" stroke-width="3.5"/>` +
+         tacchetti("M110 238.5v2.5M122 238.5v2.5M134 238.5v2.5") + `</g>`;
     // pantaloncini con ombra a destra
     s += `<path d="${pantD}" fill="${kit.pant}" ${L}/><g clip-path="url(#${id}p)"><path d="M104 140h40v50h-36z" fill="${OMBRA}"/></g><path d="${pantD}" fill="none" ${L}/>`;
     // braccia e mani (pugni grossi)
     const guanti = kit.guanti;
-    s += `<path d="M58 132q-9 18-6 34M142 132q9 18 6 34" fill="none" stroke="${INK}" stroke-width="22" stroke-linecap="round"/>`;
-    s += `<path d="M58 132q-9 18-6 34" fill="none" stroke="${pelle}" stroke-width="12.5" stroke-linecap="round"/><path d="M142 132q9 18 6 34" fill="none" stroke="${pelleO}" stroke-width="12.5" stroke-linecap="round"/>`;
-    if (a.acc === "polsini") s += `<path d="M48 155h12v9h-12zM140 155h12v9h-12z" fill="${kit.maglia === "#F7F2EC" ? "#922F29" : "#fff"}" ${L} stroke-width="3"/>`;
-    const r = guanti ? 13.5 : 11;
-    s += `<circle cx="52" cy="171" r="${r}" fill="${guanti || pelle}" ${L}/><circle cx="148" cy="171" r="${r}" fill="${guanti ? scurisci(guanti, .12) : pelleO}" ${L}/>`;
-    s += `<path d="M46 168q5-3 10 0M142 168q5-3 10 0" fill="none" stroke="${INK}" stroke-width="2.5" stroke-linecap="round"/>`;
+    const r = guanti ? 13.5 : 11, polso = kit.maglia === "#F7F2EC" ? "#922F29" : "#fff";
+    const braccio = (cls, d, col, x, px, mano) => `<g class="${cls}"><path d="${d}" fill="none" stroke="${INK}" stroke-width="22" stroke-linecap="round"/><path d="${d}" fill="none" stroke="${col}" stroke-width="12.5" stroke-linecap="round"/>` +
+      (a.acc === "polsini" ? `<path d="M${px} 155h12v9h-12z" fill="${polso}" ${L} stroke-width="3"/>` : "") +
+      `<circle cx="${x}" cy="171" r="${r}" fill="${mano}" ${L}/><path d="M${x - 6} 168q5-3 10 0" fill="none" stroke="${INK}" stroke-width="2.5" stroke-linecap="round"/></g>`;
+    s += braccio("br-s", "M58 132q-9 18-6 34", pelle, 52, 48, guanti || pelle) + braccio("br-d", "M142 132q9 18 6 34", pelleO, 148, 140, guanti ? scurisci(guanti, .12) : pelleO);
     // maglia: luce a sinistra, ombra a destra
     s += `<path d="${magliaD}" fill="${kit.maglia}" ${L}/>`;
     s += `<g clip-path="url(#${id}m)"><path d="M113 95h50v100h-58z" fill="${OMBRA}"/><path d="M72 116q12-7 24-8" fill="none" stroke="${LUCE}" stroke-width="5" stroke-linecap="round"/></g>`;
@@ -781,10 +858,12 @@ function fighterSVG(av, o = {}) {
     if (kit.banda) s += `<path d="M70 112l60 40" stroke="${kit.trim}" stroke-width="7" opacity=".9"/>`;
     s += `<path d="M86 105l14 13 14-13" fill="none" stroke="${kit.trim}" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>`;
     if (kit.lacci) s += `<path d="M96 112l8 3M96 117l8-3" stroke="${kit.trim}" stroke-width="2.5"/>`;
+    if (a.acc === "capitano") s += `<path d="M${lunghe ? "152 126l-15 6 2 9 15-6z" : "151 121l-14 7 3 8 14-7z"}" fill="${kit.maglia === "#FFD23A" ? "#FFFFFF" : "#FFC531"}" ${L} stroke-width="3.5"/>`;
     if (n) s += `<text x="100" y="151" text-anchor="middle" font-family="Lilita One, Arial Rounded MT Bold, sans-serif" font-size="29" fill="${kit.num}" stroke="${INK}" stroke-width="4" paint-order="stroke">${esc(n)}</text>`;
   }
   // collo, orecchie, testa (luce in alto a sinistra, ombra in basso a destra)
   s += `<rect x="89" y="94" width="22" height="16" rx="5" fill="${scurisci(pelle, .1)}" ${L}/>`;
+  if (a.acc === "scaldacollo") s += `<path d="M76 98q24 10 48 0l3 13q-27 11-54 0z" fill="#2B2632" ${L} stroke-width="4"/><path d="M79 106q21 8 42 0" fill="none" stroke="#D1493F" stroke-width="3"/>`;
   s += `<circle cx="54" cy="68" r="10" fill="${pelle}" ${L}/><circle cx="146" cy="68" r="10" fill="${pelleO}" ${L}/>`;
   s += `<ellipse cx="100" cy="62" rx="47" ry="45" fill="${pelleO}"/>`;
   s += `<g clip-path="url(#${id}t)"><ellipse cx="93" cy="56" rx="47" ry="45" fill="${pelle}"/><path d="M60 46q10-22 34-28" fill="none" stroke="${LUCE}" stroke-width="6" stroke-linecap="round"/></g>`;
@@ -838,6 +917,8 @@ function fighterSVG(av, o = {}) {
   s += `</g></svg>`;
   return s;
 }
+const FASI_BOSS = ["È ancora in forma", "Comincia a scricchiolare", "È a metà: ha paura!", "Sta per cedere!"];
+const faseBoss = quota => { const n = quota < .25 ? 3 : quota < .5 ? 2 : quota < .75 ? 1 : 0; return { n, testo:FASI_BOSS[n] }; };
 function bossSVG(b, quota, vinto) {
   // quota = energia rimasta 0..1
   const L = `stroke="${INK}" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"`;
@@ -855,10 +936,16 @@ function bossSVG(b, quota, vinto) {
     s += `<path d="M84 124q26-14 52 0" fill="none" stroke="${INK}" stroke-width="6" stroke-linecap="round"/>`;
     s += `<text x="110" y="30" text-anchor="middle" font-size="26">💫</text>`;
   } else {
-    const occ = (x, r) => `<circle cx="${x}" cy="84" r="${r}" fill="#FFF8D6" stroke="${INK}" stroke-width="5"/><circle cx="${x}" cy="88" r="${r * .45}" fill="${INK}"/>`;
-    s += b.occhi === 1 ? occ(110, 22) + `<path d="M84 58l52 6" stroke="${INK}" stroke-width="7" stroke-linecap="round"/>`
-                       : occ(88, 14) + occ(132, 14) + `<path d="M70 66l30 8M150 66l-30 8" stroke="${INK}" stroke-width="7" stroke-linecap="round"/>`;
-    s += `<path d="M78 118q32 22 64 0z" fill="#3a0d0b" ${L} stroke-width="5"/><path d="M86 120l6 9 6-8 6 9 6-9 6 9 6-8 6 9 4-7" fill="#fff" stroke="${INK}" stroke-width="2.5" stroke-linejoin="round"/>`;
+    // fase: 0 in forma, 1 comincia a scricchiolare, 2 a metà (ha paura), 3 sta per cedere
+    const fase = faseBoss(quota).n, paura = fase >= 2;
+    const occ = (x, r) => `<circle cx="${x}" cy="84" r="${r}" fill="#FFF8D6" stroke="${INK}" stroke-width="5"/><circle cx="${x}" cy="${paura ? 85 : 88}" r="${r * (paura ? .3 : .45)}" fill="${INK}"/>`;
+    const ciglia = d2 => `<path d="${d2}" stroke="${INK}" stroke-width="7" stroke-linecap="round"/>`;
+    s += b.occhi === 1 ? occ(110, 22) + ciglia(paura ? "M84 60q26-12 52 0" : "M84 58l52 6")
+                       : occ(88, 14) + occ(132, 14) + ciglia(paura ? "M70 72l30-10M150 72l-30-10" : "M70 66l30 8M150 66l-30 8");
+    if (fase >= 3) s += `<path d="M76 126q9-10 17 0t17 0t17 0t17 0" fill="none" stroke="${INK}" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>`;
+    else s += `<path d="M78 118q32 22 64 0z" fill="#3a0d0b" ${L} stroke-width="5"/><path d="M86 120l6 9 6-8 6 9 6-9 6 9 6-8 6 9 4-7" fill="#fff" stroke="${INK}" stroke-width="2.5" stroke-linejoin="round"/>`;
+    if (paura) s += `<path d="M176 62q8 13 0 18q-8-5 0-18z" fill="#8FD3F4" stroke="${INK}" stroke-width="3.5" stroke-linejoin="round"/>`;
+    if (fase >= 3) s += `<g transform="rotate(-24 62 62)"><rect x="42" y="55" width="40" height="14" rx="5" fill="#F7E3C8" stroke="${INK}" stroke-width="3.5"/><path d="M56 59v6M62 59v6M68 59v6" stroke="${INK}" stroke-width="2" stroke-linecap="round"/></g>`;
     const crepe = quota < .25 ? 4 : quota < .5 ? 3 : quota < .75 ? 2 : quota < .95 ? 1 : 0;
     const linee = ["M60 108l14 8-6 10 12 6", "M150 104l-12 10 8 8-10 8", "M104 46l6 12-8 8 6 10", "M40 146l18-4 4 10"];
     for (let i = 0; i < crepe; i++) s += `<path d="${linee[i]}" fill="none" stroke="${INK}" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>`;
@@ -944,6 +1031,123 @@ function disegno(k, quale, animato) {
   if (quale === "sfida") s += etichetta((SFIDA[k] || {}).tipo);
   return s + `</svg>`;
 }
+// medaglia di una sfida: colorata se presa, grigia se no
+const medaglia = (m, presa, w = 22) => `<svg width="${w}" height="${w}" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 1.5h4l1.5 7h-3.5zM17 1.5h-4l-1.5 7h3.5z" fill="${presa ? "#D1493F" : "#9A8D88"}" stroke="#1E0B0A" stroke-width="1.6" stroke-linejoin="round"/><circle cx="12" cy="15" r="7.2" fill="${presa ? m.col : "#6f625e"}" stroke="#1E0B0A" stroke-width="2"/>${presa ? `<path d="M12 10.9l1.25 2.5 2.75.4-2 1.95.5 2.75L12 17.2l-2.5 1.3.5-2.75-2-1.95 2.75-.4z" fill="rgba(255,255,255,.8)"/>` : ""}</svg>`;
+
+/* ---------- il Fighter si muove: mosse speciali ed esultanze ----------
+   Ogni movimento ha una durata (ms) e, per ogni parte, i passi [momento da 0 a 1, posizione].
+   Parti: corpo, bs/bd = braccio sinistro/destro, gs/gd = gamba sinistra/destra, ombra;
+   nel campetto anche att = tutto il Fighter e pal = la palla.
+   Le posizioni di una parte si scrivono sempre con la stessa funzione (_p, _a, _c, _r):
+   così il telefono passa da una all'altra senza scatti. */
+const _p = (x, y, r = 0, s = 1) => `translate(${x}px,${y}px) rotate(${r}deg) scale(${s})`;               // palla
+const _a = (x, sx = 1, s = 1, y = 0) => `translate(${x}px,${y}px) scale(${sx * s},${s})`;                  // tutto il Fighter
+const _c = (r, sx = 1, sy = 1, y = 0, x = 0) => `translate(${x}px,${y}px) rotate(${r}deg) scale(${sx},${sy})`;   // corpo o gamba
+const _r = g => `rotate(${g}deg)`;                                                                        // braccio o gamba
+const _k = (y, g) => `translate(0px,${y}px) translate(0px,-118px) rotate(${g}deg) translate(0px,118px)`;  // capriola: gira attorno alla pancia
+const su = (g, da = .14, a = .88) => [[0, _r(0)], [da, _r(g)], [a, _r(g)], [1, _r(0)]];                   // braccio alzato e tenuto su
+const MOSSA_ANIM = {
+  finta:{ dur:1700, parti:{
+    att:[[0, _a(0)], [.28, _a(-24)], [.42, _a(-24)], [.8, _a(96)], [1, _a(96)]],
+    corpo:[[0, _c(0)], [.28, _c(-13)], [.42, _c(-13)], [.58, _c(11)], [.85, _c(0)], [1, _c(0)]],
+    pal:[[0, _p(0, 0)], [.42, _p(0, 0)], [.8, _p(100, 0, 380)], [1, _p(100, 0, 380)]] } },
+  doppio:{ dur:1900, parti:{
+    gd:[[0, _r(0)], [.14, _r(-26)], [.3, _r(22)], [.4, _r(0)], [1, _r(0)]],
+    gs:[[0, _r(0)], [.4, _r(0)], [.54, _r(26)], [.7, _r(-22)], [.8, _r(0)], [1, _r(0)]],
+    corpo:[[0, _c(0)], [.2, _c(6)], [.6, _c(-6)], [.8, _c(0)], [1, _c(0)]],
+    att:[[0, _a(0)], [.8, _a(0)], [1, _a(-96)]],
+    pal:[[0, _p(0, 0)], [.8, _p(0, 0)], [1, _p(-100, 0, -380)]] } },
+  cruyff:{ dur:1900, parti:{
+    gd:[[0, _r(0)], [.18, _r(-30)], [.34, _r(14)], [.5, _r(0)], [1, _r(0)]],
+    corpo:[[0, _c(0)], [.18, _c(7)], [.4, _c(0)], [1, _c(0)]],
+    pal:[[0, _p(0, 0)], [.3, _p(0, 0)], [.5, _p(-30, -6)], [.6, _p(-30, -6)], [1, _p(-112, 0, -400)]],
+    att:[[0, _a(0)], [.5, _a(0)], [.62, _a(0, -1)], [1, _a(-96, -1)]] } },
+  suola:{ dur:1700, parti:{
+    gd:[[0, _c(0)], [.12, _c(0, 1, 1, -12)], [.34, _c(0, 1, 1, -8)], [.46, _c(0)], [1, _c(0)]],
+    corpo:[[0, _c(0)], [.46, _c(0)], [.6, _c(9)], [.9, _c(0)], [1, _c(0)]],
+    pal:[[0, _p(0, 0)], [.12, _p(0, 0)], [.34, _p(0, -14, -120, .92)], [.46, _p(0, -14, -120, .92)], [1, _p(102, -4, 260)]],
+    att:[[0, _a(0)], [.46, _a(0)], [1, _a(92)]] } },
+  marsiglia:{ dur:2000, parti:{
+    att:[[0, _a(0)], [.2, _a(14)], [.38, _a(28, -1)], [.56, _a(44, 1)], [.7, _a(56)], [1, _a(96)]],
+    pal:[[0, _p(0, 0)], [.2, _p(14, 0, 60)], [.38, _p(24, -6, 120)], [.56, _p(46, -6, 200)], [.7, _p(58, 0, 260)], [1, _p(100, 0, 520)]] } },
+  stop:{ dur:1800, parti:{
+    pal:[[0, _p(-170, -90, -300, .75)], [.38, _p(-6, -4, 0)], [.5, _p(16, 0, 40)], [1, _p(104, 0, 400)]],
+    gd:[[0, _r(0)], [.28, _r(0)], [.38, _r(14)], [.52, _r(-12)], [.62, _r(0)], [1, _r(0)]],
+    att:[[0, _a(0)], [.5, _a(0)], [1, _a(92)]] } },
+  esterno:{ dur:1600, parti:{
+    gd:[[0, _r(0)], [.2, _r(20)], [.38, _r(-30)], [.6, _r(0)], [1, _r(0)]],
+    corpo:[[0, _c(0)], [.2, _c(-5)], [.4, _c(6)], [.7, _c(0)], [1, _c(0)]],
+    pal:[[0, _p(0, 0)], [.36, _p(0, 0)], [.8, _p(150, -70, 500, .5)], [1, _p(170, -80, 560, .45)]] } },
+  collo:{ dur:1600, parti:{
+    gd:[[0, _r(0)], [.25, _r(-34)], [.4, _r(30)], [.62, _r(0)], [1, _r(0)]],
+    corpo:[[0, _c(0)], [.25, _c(9)], [.42, _c(-9)], [.7, _c(0)], [1, _c(0)]],
+    pal:[[0, _p(0, 0)], [.38, _p(0, 0)], [.7, _p(30, -170, 700, .4)], [1, _p(34, -190, 800, .35)]] } },
+  debole:{ dur:1600, parti:{
+    gs:[[0, _r(0)], [.25, _r(34)], [.4, _r(-30)], [.62, _r(0)], [1, _r(0)]],
+    corpo:[[0, _c(0)], [.25, _c(-9)], [.42, _c(9)], [.7, _c(0)], [1, _c(0)]],
+    pal:[[0, _p(0, 0)], [.38, _p(0, 0)], [.7, _p(-30, -170, -700, .4)], [1, _p(-34, -190, -800, .35)]] } },
+  v:{ dur:1800, parti:{
+    gd:[[0, _c(0)], [.14, _c(0, 1, 1, -12)], [.36, _c(0, 1, 1, -8)], [.5, _c(0)], [1, _c(0)]],
+    pal:[[0, _p(0, 0)], [.14, _p(0, 0)], [.36, _p(-14, -16, -100, .9)], [.5, _p(-14, -16, -100, .9)], [1, _p(104, 6, 330, 1.05)]],
+    att:[[0, _a(0)], [.52, _a(0)], [1, _a(88)]] } },
+  uscita:{ dur:1800, parti:{
+    att:[[0, _a(0, 1, .82, -14)], [.55, _a(0, 1, 1.08, 6)], [1, _a(0, 1, 1.08, 6)]],
+    corpo:[[0, _c(0)], [.35, _c(0)], [.58, _c(0, 1.14, .8)], [1, _c(0, 1.14, .8)]],
+    bs:[[0, _r(0)], [.35, _r(0)], [.58, _r(48)], [1, _r(48)]],
+    bd:[[0, _r(0)], [.35, _r(0)], [.58, _r(-48)], [1, _r(-48)]],
+    pal:[[0, _p(-125, -125, 0, .35)], [.6, _p(0, -34, 360, .95)], [1, _p(0, -34, 360, .95)]] } },
+  rimessa:{ dur:1700, riposo:_p(30, -48), parti:{
+    pal:[[0, _p(30, -48)], [.3, _p(30, -48)], [.44, _p(50, -77, 60)], [1, _p(180, -130, 600, .4)]],
+    bd:[[0, _r(0)], [.3, _r(0)], [.44, _r(-95)], [.7, _r(0)], [1, _r(0)]],
+    corpo:[[0, _c(0)], [.3, _c(-7)], [.46, _c(8)], [.75, _c(0)], [1, _c(0)]] } }
+};
+const ES_ANIM = {
+  braccia:{ dur:1600, parti:{
+    bs:[[0, _r(0)], [.14, _r(140)], [.3, _r(122)], [.46, _r(146)], [.62, _r(122)], [.78, _r(146)], [.9, _r(140)], [1, _r(0)]],
+    bd:[[0, _r(0)], [.14, _r(-140)], [.3, _r(-122)], [.46, _r(-146)], [.62, _r(-122)], [.78, _r(-146)], [.9, _r(-140)], [1, _r(0)]],
+    corpo:[[0, _c(0)], [.16, _c(0, 1, 1, -24)], [.32, _c(0, 1.06, .94)], [.48, _c(0, 1, 1, -24)], [.64, _c(0, 1.06, .94)], [.8, _c(0, 1, 1, -16)], [1, _c(0)]] } },
+  capriola:{ dur:1150, parti:{
+    corpo:[[0, _k(0, 0)], [.22, _k(-52, -80)], [.5, _k(-64, -180)], [.78, _k(-48, -290)], [.92, _k(0, -360)], [1, _k(0, -360)]],
+    ombra:[[0, "scale(1)"], [.5, "scale(.5)"], [.92, "scale(1)"], [1, "scale(1)"]] } },
+  aeroplano:{ dur:1900, parti:{
+    bs:su(78, .12), bd:su(-78, .12),
+    corpo:[[0, _c(0)], [.14, _c(-15, 1, 1, -6, -22)], [.4, _c(15, 1, 1, -6, 22)], [.64, _c(-15, 1, 1, -6, -22)], [.88, _c(12, 1, 1, -6, 16)], [1, _c(0)]] } },
+  scivolata:{ dur:1700, parti:{
+    bs:su(150, .3, .82), bd:su(-150, .3, .82),
+    corpo:[[0, _c(0)], [.14, _c(-8, 1, 1, 0, -52)], [.3, _c(6, 1.1, .74, 0, -20)], [.7, _c(6, 1.1, .74, 0, 40)], [.86, _c(0, 1, 1, 0, 30)], [1, _c(0)]] } },
+  trottola:{ dur:1500, parti:{
+    bs:su(150, .1, .9), bd:su(-150, .1, .9),
+    corpo:[[0, _c(0)], [.125, _c(0, .12, 1, -8)], [.25, _c(0, -1, 1, -14)], [.375, _c(0, .12, 1, -14)], [.5, _c(0, 1, 1, -14)], [.625, _c(0, .12, 1, -14)], [.75, _c(0, -1, 1, -10)], [.875, _c(0, .12, 1, -6)], [1, _c(0)]] } }
+};
+const PARTI = { corpo:".corpo", bs:".br-s", bd:".br-d", gs:".ga-s", gd:".ga-d", ombra:".ombra" };
+// fa partire un movimento sul disegno «radice»; extra = { att, pal } nel campetto. Con «riduci movimento» non parte niente.
+function muovi(radice, K, extra) {
+  if (!radice || !K || riduci()) return 0;
+  for (const [nome, passi] of Object.entries(K.parti)) {
+    const el = nome === "att" || nome === "pal" ? (extra && extra[nome]) : radice.querySelector(PARTI[nome]);
+    if (!el || !el.animate) continue;
+    if (el.getAnimations) el.getAnimations().forEach(a => { if (a.id === "ngu") a.cancel(); });
+    el.animate(passi.map(([offset, transform]) => ({ offset, transform, easing:"ease-in-out" })), { duration:K.dur, id:"ngu" });
+  }
+  return K.dur;
+}
+// il Fighter esulta nel modo scelto in Personalizza (data-es sulla figura)
+function esulta(fig) {
+  if (!fig) return;
+  const k = ES_ANIM[fig.dataset.es] ? fig.dataset.es : "salto";
+  if (k === "salto") { fig.classList.remove("salta"); void fig.getBoundingClientRect(); fig.classList.add("salta"); }
+  else muovi(fig.querySelector("svg"), ES_ANIM[k]);
+}
+// campetto: il Fighter del ragazzo con la palla tra i piedi; toccandolo fa la mossa k
+function campetto(k) {
+  const io = S.io.io, K = MOSSA_ANIM[k];
+  return `<div class="campetto" data-act="faiMossa" data-k="${k}" role="button" tabindex="0" aria-label="Tocca: il tuo Fighter fa la mossa"><div class="att">${fighterSVG(io.avatar, { numero:io.numero })}</div><div class="pal"${K && K.riposo ? ` style="transform:${K.riposo}"` : ""}><svg viewBox="0 0 20 20">${palla(10, 10, 8)}</svg></div></div>`;
+}
+function faiMossa(campo) {
+  if (!campo) return;
+  const K = MOSSA_ANIM[campo.dataset.k], pal = campo.querySelector(".pal");
+  muovi(campo.querySelector(".att svg"), K, { att:campo.querySelector(".att"), pal });
+}
 const coppa = (w = 26) => `<svg width="${w}" height="${w}" viewBox="0 0 24 24"><path d="M6 3h12v5a6 6 0 0 1-12 0z" fill="#FFC531" stroke="#1E0B0A" stroke-width="2" stroke-linejoin="round"/><path d="M6 5H3.5a3 3 0 0 0 3 4.5M18 5h2.5a3 3 0 0 1-3 4.5" fill="none" stroke="#1E0B0A" stroke-width="2"/><path d="M10 14h4v3h-4zM7.5 21h9l-1-4h-7z" fill="#E89B00" stroke="#1E0B0A" stroke-width="2" stroke-linejoin="round"/></svg>`;
 const stellaIco = (col) => `<svg class="stella-ico" viewBox="0 0 24 24"><path d="M12 2.5l2.8 5.8 6.4.9-4.6 4.5 1.1 6.3L12 17l-5.7 3 1.1-6.3-4.6-4.5 6.4-.9z" fill="${col}" stroke="#1E0B0A" stroke-width="2" stroke-linejoin="round"/></svg>`;
 
@@ -951,9 +1155,12 @@ const stellaIco = (col) => `<svg class="stella-ico" viewBox="0 0 24 24"><path d=
    CALCOLI: trofei, statistiche, record
    (gli stessi valori di gioco_danni() nel database)
    ===================================================================== */
+// giorno (ora di Roma) di un evento: serve alle medaglie
+const fmtGiorno = (() => { try { return new Intl.DateTimeFormat("sv-SE", { timeZone:"Europe/Rome" }); } catch (e) { return null; } })();
+const giornoRoma = iso => { try { return fmtGiorno.format(new Date(iso)); } catch (e) { return String(iso).slice(0, 10); } };
 function calcola(eventi, ggRicevuti, bonusTrio, bossVinti) {
   const st = { impegno:0, coraggio:0, rispetto:0, squadra:0, motore:0, recupero:0, tocco:0, visione:0 };
-  const record = {}, recordCombine = {}, perSett = {}, mosse = {};
+  const record = {}, recordCombine = {}, perSett = {}, mosse = {}, quando_ = {}, storia = {};
   let trofei = 0, greencard = 0;
   const ev = [...eventi].sort((a, b) => (a.creato < b.creato ? -1 : a.creato > b.creato ? 1 : a.id - b.id));
   for (const e of ev) {
@@ -966,6 +1173,8 @@ function calcola(eventi, ggRicevuti, bonusTrio, bossVinti) {
       trofei += T.mossa; st.tocco += 3; st.coraggio += 1; mosse[d.mossa] = e.creato;
     } else if (e.tipo === "sfida") {
       const sf = SFIDA[d.sfida]; if (!sf) continue;
+      (quando_[d.sfida] = quando_[d.sfida] || new Set()).add(giornoRoma(e.creato));
+      (storia[d.sfida] = storia[d.sfida] || []).push(Number(d.valore));
       const n = (perSett[e.settimana] = (perSett[e.settimana] || 0) + 1);
       if (n <= T.sfidaMax) { trofei += T.sfida; st.impegno += 1; }
       st[sf.stat] += 1;
@@ -992,23 +1201,47 @@ function calcola(eventi, ggRicevuti, bonusTrio, bossVinti) {
   trofei += (bonusTrio || []).length * T.trio; st.squadra += 2 * (bonusTrio || []).length;
   trofei += (bossVinti || []).length * T.boss;
   const lv = Object.fromEntries(Object.entries(st).map(([k, p]) => [k, { p, lv:1 + Math.floor(p / 4), q:(p % 4) / 4 }]));
-  return { trofei, st:lv, record, recordCombine, mosse, greencard, grado:grado(trofei) };
+  // medaglie: giorni diversi in cui ha fatto ogni sfida → 0 nessuna, 1 bronzo, 2 argento, 3 oro
+  const giorni = {}, medaglie = {};
+  for (const s of SFIDE) { giorni[s.k] = quando_[s.k] ? quando_[s.k].size : 0; medaglie[s.k] = MEDAGLIE.filter(m => giorni[s.k] >= m.giorni).length; }
+  return { trofei, st:lv, record, recordCombine, mosse, greencard, grado:grado(trofei), giorni, medaglie, storia };
 }
 function sbloccato(tipo, k, trofei) {
   for (const tp of STRADA) for (const [t, kk] of tp.premi) if (t === tipo && kk === k) return trofei >= tp.t;
-  return tipo === "capelli" || tipo === "colore" || tipo === "pelle" || tipo === "occhi" || (tipo === "acc" && k === "nessuno") || (tipo === "effetto" && k === "");
+  return tipo === "capelli" || tipo === "colore" || tipo === "pelle" || tipo === "occhi" || (tipo === "acc" && k === "nessuno") || (tipo === "effetto" && k === "") || (tipo === "esultanza" && k === "salto");
 }
 function sogliaDi(tipo, k) { for (const tp of STRADA) for (const [t, kk] of tp.premi) if (t === tipo && kk === k) return tp.t; return 0; }
 function titoliDisponibili(c) {
   const out = GRADI.filter(g => c.trofei >= g.da).map(g => g.nome);
   for (const [k, nome] of Object.entries(TITOLI_STAT)) if (c.st[k].lv >= 5) out.push(nome);
   if (c.greencard) out.push("Cartellino verde");
-  if (c.trofei >= 2000) out.push("Never Give Up");
+  if (c.medaglie) {
+    if (SFIDE.every(s => c.medaglie[s.k] >= 1)) out.push("Tuttofare");
+    if (SFIDE.filter(s => c.medaglie[s.k] >= 3).length >= 3) out.push("Mai fermo");
+  }
+  for (const tp of STRADA) for (const [t, k] of tp.premi) if (t === "titolo" && c.trofei >= tp.t) out.push(k);
   return out;
 }
 const nomePremio = ([t, k]) => t === "maglia" ? KIT[k].nome : t === "scarpe" ? "Scarpe " + SCARPE[k].nome.toLowerCase()
   : t === "sfondo" ? "Sfondo " + SFONDI[k].toLowerCase() : t === "cornice" ? "Cornice " + CORNICI[k].toLowerCase()
-  : t === "acc" ? ACCESSORI[k].nome : t === "effetto" ? "Effetto scintille" : t === "titolo" ? "Titolo «" + k + "»" : k;
+  : t === "acc" ? ACCESSORI[k].nome : t === "effetto" ? "Effetto scintille" : t === "esultanza" ? "Esultanza: " + ESULTANZE[k].nome.toLowerCase() : t === "titolo" ? "Titolo «" + k + "»" : k;
+// energia tolta al boss da questo ragazzo nel mese: stessi conti di gioco_danni() nel database
+function mieiDanni(D) {
+  if (!D.boss) return 0;
+  const m = D.boss.mese, n = {}; let p = 0;
+  for (const e of D.eventi) {
+    if (e.mese !== m) continue;
+    const dd = e.dati || {};
+    if (e.tipo === "stella") p += T.stella + (dd.area === areaMissione(e.settimana).k ? T.missione : 0);
+    else if (e.tipo === "mossa") p += T.mossa;
+    else if (e.tipo === "sfida") { n[e.settimana] = (n[e.settimana] || 0) + 1; if (n[e.settimana] <= T.sfidaMax) p += T.sfida; }
+    else if (e.tipo === "autovalutazione") p += T.autoval;
+    else if (e.tipo === "gg") p += T.ggDato;
+    else if (e.tipo === "combine") p += T.combine;
+    else if (e.tipo === "greencard") p += T.greencard;
+  }
+  return p + (D.gg_ricevuti || []).filter(g => g.mese === m).length * T.ggRicevuto;
+}
 
 /* =====================================================================
    STATO E DISEGNO DELLA PAGINA
@@ -1160,7 +1393,7 @@ function editorAvatar(av, trofei, numero, conTitoli) {
       return `<button class="chip${String(a[tipo]) === String(k) ? " on" : ""}" ${ok ? `data-act="av" data-t="${tipo}" data-k="${esc(k)}"` : `disabled style="opacity:.55"`}>${extra || ""}${esc(nome)}${lucch(tipo, k)}</button>`;
     }).join("")}</div></div>`;
   const tondo = c => `<i style="width:18px;height:18px;border-radius:50%;background:${c};border:2px solid #1E0B0A;display:inline-block"></i>`;
-  let h = `<div class="eroe anteprima-av sf-${a.sfondo} cr-${a.cornice}${a.effetto === "scintille" ? " scintille" : ""}" style="margin-bottom:14px"><div class="numero">${esc(numero || "")}</div><div class="figura" id="anteprima">${fighterSVG(a, { numero })}</div></div>`;
+  let h = `<div class="eroe anteprima-av sf-${a.sfondo} cr-${a.cornice}${a.effetto === "scintille" ? " scintille" : ""}" style="margin-bottom:14px"><div class="numero">${esc(numero || "")}</div><div class="figura" id="anteprima" data-act="salta" data-es="${esc(a.esultanza)}">${fighterSVG(a, { numero })}</div></div>`;
   h += `<section class="pan chiaro">`;
   h += gruppo("Pelle", "pelle", PELLI.map((c, i) => [i, "", tondo(c)]));
   h += gruppo("Capelli", "capelli", CAPELLI.map(x => [x.k, x.nome]));
@@ -1169,6 +1402,7 @@ function editorAvatar(av, trofei, numero, conTitoli) {
   h += gruppo("Maglia", "maglia", Object.entries(KIT).map(([k, x]) => [k, x.breve, tondo(x.maglia)]));
   h += gruppo("Scarpe", "scarpe", Object.entries(SCARPE).map(([k, x]) => [k, x.nome, tondo(x.c)]));
   h += gruppo("Accessorio", "acc", Object.entries(ACCESSORI).map(([k, x]) => [k, x.nome]));
+  h += gruppo("Esultanza (tocca il Fighter per vederla)", "esultanza", Object.entries(ESULTANZE).map(([k, x]) => [k, x.nome]));
   if (trofei > 0 || conTitoli) {
     h += gruppo("Sfondo della card", "sfondo", Object.entries(SFONDI).map(([k, x]) => [k, x]));
     h += gruppo("Cornice", "cornice", Object.entries(CORNICI).map(([k, x]) => [k, x]));
@@ -1202,9 +1436,26 @@ function cardEroe(io, c) {
   const tit = a.titolo && titoliDisponibili(c).includes(a.titolo) ? a.titolo : c.grado.nome;
   return `<div class="eroe sf-${a.sfondo} cr-${a.cornice}${a.effetto === "scintille" ? " scintille" : ""}">
     <div class="numero">${esc(io.numero || "")}</div>
-    <div class="figura" data-act="salta" aria-label="Tocca il tuo Fighter">${fighterSVG(a, { numero:io.numero })}</div>
+    <div class="figura" data-act="salta" data-es="${esc(a.esultanza)}" aria-label="Tocca il tuo Fighter: esulta">${fighterSVG(a, { numero:io.numero })}</div>
     <div class="targa"><div><div class="nome">${esc(io.soprannome)}</div><div class="titolo">${esc(tit)}</div></div><span class="grado g-${c.grado.k}">${c.grado.nome}</span></div>
   </div>`;
+}
+// cosa c'è da fare adesso: al massimo quattro righe, ognuna porta alla pagina giusta
+function traguardi() {
+  const D = S.io, c = S.c, w = D.ora.settimana, out = [];
+  const riga = (tab, ico, testo) => `<button class="trag" data-act="tab" data-k="${tab}"><span class="ic">${ico}</span><span>${testo}</span><span class="va" aria-hidden="true">›</span></button>`;
+  const prossima = STRADA.find(t => t.t > c.trofei);
+  if (prossima) out.push(riga("strada", coppa(26), `Mancano <b>${prossima.t - c.trofei}</b> trofei per: ${esc(prossima.premi.map(nomePremio).join(", "))}`));
+  const fatte = D.eventi.filter(e => e.tipo === "sfida" && e.settimana === w).length;
+  if (fatte < T.sfidaMax) out.push(riga("sfide", ICONE.sfide, `Sfide a casa: ancora <b>${T.sfidaMax - fatte}</b> con i trofei questa settimana`));
+  const daGG = (D.trio || []).filter(m => m.id !== D.io.id && !m.gg_inviato).length;
+  if (daGG) out.push(riga("squadra", `<span class="pallino" style="background:var(--squadra)">GG</span>`, `Hai <b>${daGG}</b> GG da mandare alla tua fantasquadra`));
+  if (D.boss && !D.boss.sconfitto && !mieiDanni(D)) out.push(riga("squadra", ICONE.mosse, `Il boss di ${nomeMese(D.boss.mese)} aspetta il tuo primo colpo`));
+  // la medaglia più vicina tra le sfide già cominciate
+  const vicina = SFIDE.map(s => ({ s, m:MEDAGLIE[c.medaglie[s.k]], g:c.giorni[s.k] })).filter(x => x.m && x.g > 0).sort((a, b) => (a.m.giorni - a.g) - (b.m.giorni - b.g))[0];
+  if (vicina) { const n = vicina.m.giorni - vicina.g; out.push(riga("sfide", medaglia(vicina.m, true, 26), `${esc(vicina.s.nome)}: ancora <b>${n}</b> ${n === 1 ? "giorno" : "giorni"} per la medaglia ${vicina.m.di}`)); }
+  if (!D.eventi.some(e => e.tipo === "obiettivo" && e.settimana === w)) out.push(riga("sfide", ICONE.stelle, "Scegli il tuo obiettivo della settimana"));
+  return out.length ? `<section class="pan"><h3>Prossimi traguardi</h3>${out.slice(0, 4).join("")}</section>` : "";
 }
 function tFighter() {
   const D = S.io, c = S.c, w = D.ora.settimana, mis = areaMissione(w);
@@ -1216,12 +1467,13 @@ function tFighter() {
     <div class="grande">${mis.missione}</div>
     <span class="bonus">${stellaIco(mis.col)}Stella ${mis.nome.toLowerCase()}: ${T.stella + T.missione} trofei invece di ${T.stella}</span>
   </section>`;
+  h += traguardi();
   h += `<section class="pan"><h3>Le tue stelle della settimana</h3>`;
   if (!stelle.length) h += `<p class="fioco" style="margin:0">Ancora nessuna. In allenamento e in partita il mister guarda quattro cose: impegno, coraggio, rispetto e squadra.</p>`;
   else h += stelle.map(e => { const ar = AREA[e.dati.area], f = (FRASI[e.dati.area] || [])[e.dati.frase]; return `<div class="voce">${stellaIco(ar.col)}<div><div class="d-s" style="color:${ar.col};font-size:16px">${ar.nome}</div><div>${esc(f ? f.k : "")}</div></div></div>`; }).join("");
   h += `</section>`;
   h += `<section class="pan"><h3>Cuore</h3>${AREE.map(x => statRiga(x, c.st[x.k])).join("")}<div class="sep"></div><h3>Piedi</h3>${PIEDI.map(x => statRiga(x, c.st[x.k])).join("")}
-    <p class="fioco piccolo" style="margin:6px 0 0">Crescono solo con quello che fai: stelle del mister, sfide, mosse e GG.</p></section>`;
+    <p class="fioco piccolo" style="margin:6px 0 0">Crescono solo con quello che fai: stelle del mister, sfide, mosse e GG. A livello 5 ogni statistica ti dà un titolo da mettere sotto il nome.</p></section>`;
   return h;
 }
 function tSfide() {
@@ -1230,12 +1482,13 @@ function tSfide() {
   const conta = Math.min(T.sfidaMax, mie.length);
   let h = `<h1 class="d">Sfide a casa</h1>
     <div class="pan" style="padding:12px 16px"><div class="riga sp"><b>Questa settimana</b><span class="slot" aria-label="${conta} di ${T.sfidaMax}">${Array.from({ length:T.sfidaMax }, (_, i) => `<i class="${i < conta ? "on" : ""}">${i < conta ? coppa(18) : ""}</i>`).join("")}</span></div>
-      <p class="fioco piccolo" style="margin:8px 0 0">+${T.sfida} trofei a sfida (le prime ${T.sfidaMax}) · +${T.record} se batti il record · conferma un genitore con il PIN</p></div>
+      <p class="fioco piccolo" style="margin:8px 0 0">+${T.sfida} trofei a sfida (le prime ${T.sfidaMax}) · +${T.record} se batti il record · conferma un genitore con il PIN</p>
+      <p class="fioco piccolo" style="margin:6px 0 0">Ogni sfida ha tre medaglie: le prendi facendola in giorni diversi. Conta la costanza, non il risultato.</p></div>
     <div class="gr2" style="margin:0 0 18px">`;
   for (const s of SFIDE) {
     const fatte = mie.filter(e => e.dati.sfida === s.k).length;
     const rec = c.record[s.k];
-    h += `<button class="tessera${fatte ? " fatta" : ""}" data-act="sfida" data-k="${s.k}">${fatte ? `<span class="badge">fatta</span>` : ""}<span class="dis">${disegno(s.k, "sfida")}</span><span class="t">${esc(s.nome)}</span><span class="r">${rec != null ? "Record: " + fmtVal(rec, s.unita) : "Nessun record"}</span></button>`;
+    h += `<button class="tessera${fatte ? " fatta" : ""}" data-act="sfida" data-k="${s.k}">${fatte ? `<span class="badge">fatta</span>` : ""}<span class="med" aria-label="Medaglie: ${c.medaglie[s.k]} su 3">${MEDAGLIE.map((m, i) => medaglia(m, i < c.medaglie[s.k], 21)).join("")}</span><span class="dis">${disegno(s.k, "sfida")}</span><span class="t">${esc(s.nome)}</span><span class="r">${rec != null ? "Record: " + fmtVal(rec, s.unita) : "Nessun record"}</span></button>`;
   }
   h += `</div>`;
   // obiettivo
@@ -1266,13 +1519,15 @@ function tSquadra() {
   if (D.boss) {
     const b = bossDelMese(D.boss.mese, imp), vinto = !!D.boss.sconfitto;
     const quota = Math.max(0, 1 - D.boss.danni / D.boss.hp);
-    const premio = premioDelMese(D.boss.mese, imp);
+    const premio = premioDelMese(D.boss.mese, imp), fase = faseBoss(quota), miei = mieiDanni(D);
     h += `<section class="pan boss">
       <span class="area-chip" style="background:var(--oro)">Boss di ${nomeMese(D.boss.mese)}</span>
       <h2 class="d" style="margin:8px 0 0">${esc(b.nome)}</h2>
       ${bossSVG(b, quota, vinto)}
-      <div class="energia"><i style="width:${Math.round(quota * 100)}%"></i><span>${vinto ? "Sconfitto!" : "Energia " + Math.round(quota * 100) + "%"}</span></div>
+      ${vinto ? "" : `<div><span class="fase f${fase.n}">${fase.testo}</span></div>`}
+      <div class="energia"><i style="width:${Math.round(quota * 100)}%"></i>${vinto ? "" : `<b style="left:25%"></b><b style="left:50%"></b><b style="left:75%"></b>`}<span>${vinto ? "Sconfitto!" : "Energia " + Math.round(quota * 100) + "%"}</span></div>
       <p style="margin:0 0 6px">${vinto ? `Battuto! Ognuno ha preso ${T.boss} trofei.` : `Ogni trofeo di chiunque gli toglie energia. Si batte solo se tutti danno una mano.`}</p>
+      ${vinto ? "" : `<p class="tuo" style="margin:0 0 6px">${miei ? `Questo mese <b>tu</b> gli hai tolto <b>${miei}</b> di energia.` : `Questo mese non l'hai ancora colpito: basta una sfida a casa o un GG.`}</p>`}
       ${!vinto && D.boss.devono ? `<p class="fioco piccolo" style="margin:0">${D.boss.hanno} su ${D.boss.devono} hanno già colpito questo mese.</p>` : ""}
       ${premio ? `<p style="margin:8px 0 0"><span class="area-chip" style="background:var(--erba)">Premio</span> ${esc(premio)}</p>` : ""}
     </section>`;
@@ -1330,8 +1585,8 @@ function tStrada() {
     <div class="prog" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(quota * 100)}"><i style="width:${Math.max(4, Math.round(quota * 100))}%"></i></div>
     ${prossima ? `<div class="riga sp piccolo fioco"><span class="num">${prima.t}</span><span class="num">${prossima.t}</span></div>` : ""}</section>`;
   // mosse
-  h += `<section class="pan"><h3>Mosse speciali</h3><p class="fioco piccolo">Si sbloccano facendole vedere al mister in allenamento. Ognuna vale ${T.mossa} trofei.</p><div class="gr2">`;
-  h += MOSSE.map(m => { const ok = c.mosse[m.k]; return `<button class="tessera${ok ? " fatta" : " chiusa"}" data-act="mossa" data-k="${m.k}">${ok ? `<span class="badge">sbloccata</span>` : ""}<span class="dis">${disegno(m.k, "mossa")}</span><span class="t">${esc(m.nome)}</span><span class="r">${ok ? quando(ok) : "Falla vedere al mister"}</span></button>`; }).join("");
+  h += `<section class="pan"><h3>Mosse speciali</h3><p class="fioco piccolo">Si sbloccano facendole vedere al mister in allenamento. Ognuna vale ${T.mossa} trofei, e da quel momento la fa anche il tuo Fighter.</p><div class="gr2">`;
+  h += MOSSE.map(m => { const ok = c.mosse[m.k]; return `<button class="tessera${ok ? " fatta" : " chiusa"}" data-act="mossa" data-k="${m.k}">${ok ? `<span class="badge">sbloccata</span>` : ""}<span class="dis">${disegno(m.k, "mossa")}</span><span class="t">${esc(m.nome)}</span><span class="r">${ok ? "Tocca: la fa il tuo Fighter" : "Falla vedere al mister"}</span></button>`; }).join("");
   h += `</div></section>`;
   // strada
   h += `<section class="pan"><h3>La strada dei trofei</h3><div class="strada">`;
@@ -1373,9 +1628,27 @@ function fSfida(k) {
     h += `<label class="campo"><span>Risultato (${esc(s.unita)})</span><input class="inp" id="valSfida" inputmode="decimal" value="${esc(F.valore)}"></label>`;
     h += `<label class="campo"><span>PIN del genitore</span><input class="inp pin" id="pinSfida" type="password" inputmode="numeric" maxlength="4" autocomplete="off"></label>`;
     h += `<button class="btn pieno verde" data-act="salvaSfida">Conferma la sfida</button>`;
+    const g = S.c.giorni[k] || 0, liv = S.c.medaglie[k] || 0, pross = MEDAGLIE[liv];
+    h += `<div class="sep" style="background:#e3d2c5"></div><h3 style="color:#1E0B0A">Le tue medaglie</h3>
+      <div class="medaglie">${MEDAGLIE.map((m, i) => `<div class="${i < liv ? "presa" : ""}">${medaglia(m, i < liv, 40)}<b>${m.nome}</b>${m.giorni} giorni</div>`).join("")}</div>
+      <p class="fioco piccolo" style="text-align:center">${g ? `L'hai fatta in <b>${g}</b> ${g === 1 ? "giorno" : "giorni diversi"}.` : "Contano i giorni diversi in cui la fai."} ${pross ? `Ancora ${pross.giorni - g} per la medaglia ${pross.di}.` : "Hai tutte le medaglie di questa sfida!"}</p>`;
+    h += grafico(s, S.c.storia[k], rec);
     return h;
   };
   apri(html);
+}
+// i propri risultati nel tempo (gli ultimi 12): in alto è sempre «meglio»
+function grafico(s, valori, record) {
+  if (!valori || valori.length < 2) return "";
+  const v = valori.slice(-12), W = 300, H = 96, mx = 14, my = 16;
+  const lo = Math.min(...v), hi = Math.max(...v), span = hi - lo || 1, top = s.verso > 0 ? hi : lo, iTop = v.lastIndexOf(top);
+  const X = i => (mx + i * (W - 2 * mx) / (v.length - 1)).toFixed(1);
+  const Y = x => { const q = (x - lo) / span; return (H - my - (s.verso > 0 ? q : 1 - q) * (H - 2 * my)).toFixed(1); };
+  return `<div class="grafico"><h3>I tuoi risultati</h3><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="I tuoi ultimi ${v.length} risultati">
+    <path d="M${mx} ${H - 6}H${W - mx}" stroke="#e3d2c5" stroke-width="2" stroke-linecap="round"/>
+    <polyline points="${v.map((x, i) => X(i) + "," + Y(x)).join(" ")}" fill="none" stroke="#922F29" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+    ${v.map((x, i) => `<circle cx="${X(i)}" cy="${Y(x)}" r="${i === iTop ? 7 : 4.5}" fill="${i === iTop ? "#FFC531" : "#fff"}" stroke="#1E0B0A" stroke-width="2.5"/>`).join("")}
+  </svg><div class="riga sp piccolo fioco"><span>${valori.length > 12 ? "12 volte fa" : "Prima volta"}: ${fmtVal(v[0], s.unita)}</span><span>Record: <b>${fmtVal(record != null ? record : top, s.unita)}</b></span></div></div>`;
 }
 function fGG(id) {
   const x = (S.io.compagni || []).find(c => c.id === id) || { soprannome:"" };
@@ -1383,7 +1656,11 @@ function fGG(id) {
 }
 function fMossa(k) {
   const m = MOSSA[k], ok = S.c.mosse[k];
-  apri(() => `<button class="chiudi" data-act="chiudi" aria-label="Chiudi">✕</button><h2>${esc(m.nome)}</h2><div class="disegno">${disegno(k, "mossa", true)}</div><p>${esc(m.come)}</p><p class="fioco">${ok ? "Sbloccata il " + quando(ok) + "." : "Allenala a casa, poi falla vedere al mister in allenamento: la sblocca lui."}</p>`);
+  apri(() => `<button class="chiudi" data-act="chiudi" aria-label="Chiudi">✕</button><h2>${esc(m.nome)}</h2>` +
+    (ok ? campetto(k) + (riduci() ? "" : `<p class="fioco piccolo" style="text-align:center;margin:-4px 0 12px">Tocca il campo: il tuo Fighter la rifà.</p>`) : "") +
+    `<div class="disegno${ok ? " basso" : ""}">${disegno(k, "mossa", true)}</div><p>${esc(m.come)}</p>
+     <p class="fioco">${ok ? "Sbloccata il " + quando(ok) + "." : "Allenala a casa, poi falla vedere al mister in allenamento: la sblocca lui. Da quel momento la fa anche il tuo Fighter."}</p>`);
+  if (ok) setTimeout(() => faiMossa(document.querySelector("#foglio .campetto")), 450);
 }
 function fPersonalizza() {
   const io = S.io.io;
@@ -1442,6 +1719,9 @@ function sStelle(X) {
     h += `<button class="riga-r${st.length ? "" : " vuota"}" data-act="stelleDi" data-id="${g.id}"><div class="mini">${fighterSVG(g.avatar, { busto:true })}</div><div><div class="nm">${esc(g.nome)}</div><div class="sb">${esc(g.soprannome)}${imp.figlio === g.id ? " · tuo figlio" : ""}</div></div>
       <div class="puntini">${AREE.map(a => `<i style="${aree.has(a.k) ? "background:" + a.col : ""}" title="${a.nome}"></i>`).join("")}</div></button>`;
   }
+  const date = lista.reduce((n, g) => n + stelleDi(g.id).length, 0);
+  h += `<section class="pan chiaro" style="margin-top:16px"><h3>Hai finito?</h3><p class="fioco piccolo">Questa settimana ${date === 1 ? "è stata data 1 stella" : "sono state date " + date + " stelle"}. Avvisa il gruppo dei genitori: i ragazzi aprono il gioco e trovano le frasi del mister. Nel messaggio non ci sono nomi né punteggi.</p>
+    <button class="btn bianco pieno" data-act="avvisaStelle">Messaggio «Stelle messe»</button></section>`;
   return h;
 }
 function fStelleDi(id) {
@@ -1680,20 +1960,28 @@ function prossimaFesta() {
   if (!f) { $("festa").innerHTML = ""; contaTrofei(); return; }
   $("festa").innerHTML = `<div class="festa" data-act="chiudiFesta"><div class="scatola" role="dialog" aria-modal="true">${f.html}</div></div>`;
   if (f.suono) SUONI.suona(f.suono);
+  // nella festa il Fighter esulta a modo suo, o fa vedere la mossa nuova
+  const campo = $("festa").querySelector(".campetto"), fig = $("festa").querySelector(".figura.esulta");
+  if (campo) setTimeout(() => faiMossa(campo), 650);
+  if (fig) setTimeout(() => esulta(fig), 350);
 }
 const raggi = `<div class="raggi"></div>`;
 const coriandoli = () => riduci() ? "" : `<div class="coriandoli">${Array.from({ length:26 }, (_, i) => `<i style="background:${["#FFC531","#FF4F5E","#57C7FF","#43D17A","#9B87FF"][i % 5]};--x:${Math.round(Math.cos(i) * (120 + (i * 37) % 90))}px;--y:${Math.round(Math.sin(i) * (120 + (i * 53) % 90))}px;--r:${i * 47}deg;animation-delay:${(i % 6) * 30}ms"></i>`).join("")}</div>`;
-const figFesta = () => `<div class="figura salta" style="display:flex;justify-content:center">${fighterSVG(S.io.io.avatar, { numero:S.io.io.numero })}</div>`;
+const figFesta = () => { const es = ({ ...AV_BASE, ...S.io.io.avatar }).esultanza; return `<div class="figura ${ES_ANIM[es] ? "esulta" : "salta"}" data-es="${esc(es)}" style="display:flex;justify-content:center">${fighterSVG(S.io.io.avatar, { numero:S.io.io.numero })}</div>`; };
 // piccola immagine di ciò che si è sbloccato
 function icoPremio([t, k]) {
   if (t === "maglia") { const x = KIT[k]; return `<svg viewBox="0 0 64 56"><path d="M14 8q18-7 36 0l12 9-6 15-8-3v22h-32v-22l-8 3-6-15z" fill="${x.maglia}" ${DK}/><path d="M24 7l8 8 8-8" fill="none" stroke="${x.trim}" stroke-width="4" stroke-linecap="round"/>${x.banda ? `<path d="M20 18l26 26" stroke="${x.trim}" stroke-width="5"/>` : ""}</svg>`; }
   if (t === "scarpe") return `<svg viewBox="0 0 64 44">${scarpaLato(30, 34, SCARPE[k].c)}</svg>`;
   if (t === "sfondo") return `<div class="tess sf-${k}"></div>`;
   if (t === "cornice") return `<div class="tess cr-${k}" style="background:#7a241f"></div>`;
-  if (t === "acc") return k === "fascetta"
-    ? `<svg viewBox="0 0 64 40"><path d="M6 22q26-16 52 0l-2 10q-24-14-48 0z" fill="#fff" ${DK}/><path d="M10 25q22-12 44 0" stroke="#922F29" stroke-width="3" fill="none"/></svg>`
-    : `<svg viewBox="0 0 64 40"><rect x="8" y="10" width="18" height="20" rx="5" fill="#fff" ${DK}/><rect x="38" y="10" width="18" height="20" rx="5" fill="#fff" ${DK}/><path d="M8 20h18M38 20h18" stroke="#922F29" stroke-width="3"/></svg>`;
+  if (t === "acc") return ({
+    fascetta:`<svg viewBox="0 0 64 40"><path d="M6 22q26-16 52 0l-2 10q-24-14-48 0z" fill="#fff" ${DK}/><path d="M10 25q22-12 44 0" stroke="#922F29" stroke-width="3" fill="none"/></svg>`,
+    polsini:`<svg viewBox="0 0 64 40"><rect x="8" y="10" width="18" height="20" rx="5" fill="#fff" ${DK}/><rect x="38" y="10" width="18" height="20" rx="5" fill="#fff" ${DK}/><path d="M8 20h18M38 20h18" stroke="#922F29" stroke-width="3"/></svg>`,
+    capitano:`<svg viewBox="0 0 64 40"><rect x="9" y="9" width="46" height="22" rx="7" fill="#FFC531" ${DK}/><text x="32" y="27" text-anchor="middle" font-family="Lilita One, Arial Rounded MT Bold, sans-serif" font-size="18" fill="${INK}">C</text></svg>`,
+    scaldacollo:`<svg viewBox="0 0 64 40"><path d="M8 8q24 10 48 0l3 18q-27 12-54 0z" fill="#2B2632" ${DK}/><path d="M11 18q21 9 42 0" stroke="#D1493F" stroke-width="3" fill="none"/></svg>`
+  })[k] || "";
   if (t === "effetto") return `<svg viewBox="0 0 64 56"><path d="M32 6l6 16 16 6-16 6-6 16-6-16-16-6 16-6z" fill="#FFC531" ${DK}/><circle cx="52" cy="10" r="4" fill="#fff" ${DK} stroke-width="2.5"/></svg>`;
+  if (t === "esultanza") return `<svg viewBox="0 0 64 56"><path d="M32 28v14M32 31l-13-13M32 31l13-13M32 42l-8 11M32 42l8 11" fill="none" stroke="${INK}" stroke-width="9" stroke-linecap="round"/><path d="M32 28v14M32 31l-13-13M32 31l13-13M32 42l-8 11M32 42l8 11" fill="none" stroke="#922F29" stroke-width="4.5" stroke-linecap="round"/><circle cx="32" cy="17" r="8" fill="#E3AC7E" ${DK}/><path d="M8 10l3 5M56 10l-3 5M6 26h5M58 26h-5" stroke="#FFC531" stroke-width="3.5" stroke-linecap="round"/></svg>`;
   return `<svg viewBox="0 0 64 44"><path d="M4 12h56l-6 10 6 10h-56l6-10z" fill="#FFC531" ${DK}/></svg>`;
 }
 const tesserePremi = premi => `<div class="premi">${premi.map(p => `<div class="premio"><div class="ico">${icoPremio(p)}</div>${esc(nomePremio(p))}</div>`).join("")}</div>`;
@@ -1709,36 +1997,89 @@ function festaRecord(s, valore, prima, guadagno) {
     ${guadagno ? `<div class="guadagno">+${guadagno} ${coppa(24)}</div>` : ""}<button class="btn pieno" data-act="chiudiFesta">Grande!</button>`;
 }
 
+function festaMedaglia(s, m, giorni) {
+  return raggi + coriandoli() + `<span class="sopra">${esc(s.nome)}</span><h2 class="d titolo-festa" style="font-size:36px">Medaglia ${m.di}!</h2>
+    <div class="medagliona">${medaglia(m, true, 128)}</div>
+    <p style="margin:0 0 12px">L'hai fatta in <b>${giorni} giorni diversi</b>. Questa è costanza: un po' alla volta, senza mollare.</p>
+    <button class="btn pieno" data-act="chiudiFesta">Grande!</button>`;
+}
+function festaMossa(k, altre) {
+  return raggi + coriandoli() + `<span class="sopra">Mossa speciale sbloccata</span><h2 class="d titolo-festa" style="font-size:34px">${esc(MOSSA[k].nome)}</h2>
+    ${campetto(k)}<p class="fioco piccolo" style="margin:0 0 6px">Adesso la fa anche il tuo Fighter${riduci() ? "" : ": tocca il campo per rivederla"}. ${altre ? (altre === 1 ? "C'è anche un'altra mossa nuova" : `Ci sono altre ${altre} mosse nuove`) + ": le trovi nei Trofei." : ""}</p>
+    <div class="guadagno">+${T.mossa * (altre + 1)} ${coppa(24)}</div><button class="btn pieno" data-act="chiudiFesta">Grande!</button>`;
+}
+function festaBoss(mese) {
+  const imp = S.io.squadra.impostazioni, b = bossDelMese(mese, imp), premio = premioDelMese(mese, imp);
+  return raggi + coriandoli() + `<span class="sopra">Boss di ${nomeMese(mese)}</span><h2 class="d titolo-festa">Sconfitto!</h2>
+    <div class="boss-festa">${bossSVG(b, 0, true)}</div><p style="margin:0 0 8px">${esc(b.nome)} è al tappeto: l'avete battuto <b>tutti insieme</b>.</p>
+    ${premio ? `<p style="margin:0 0 8px"><span class="area-chip" style="background:var(--erba)">Premio di squadra</span> ${esc(premio)}</p>` : ""}
+    <div class="guadagno">+${T.boss} ${coppa(24)}</div><button class="btn pieno" data-act="chiudiFesta">Grande!</button>`;
+}
+// una volta sola, a chi giocava già: cosa c'è di nuovo e i premi che ha già guadagnato con i trofei di prima
+function festaCresciuto(trofeiPrima) {
+  const retro = STRADA.filter(tp => tp.n === 3 && tp.t <= trofeiPrima).flatMap(tp => tp.premi);
+  const voce = (col, ic, t) => `<div class="voce" style="text-align:left"><span class="pallino" style="background:${col}">${ic}</span><div>${t}</div></div>`;
+  return raggi + `<span class="sopra">Novità nel gioco</span><h2 class="d titolo-festa" style="font-size:32px">Il gioco è cresciuto!</h2>
+    <div class="elenco-festa">${voce("var(--cielo)", "M", "<b>Il tuo Fighter fa le mosse</b> che hai sbloccato: guardale nei Trofei.")}${voce("var(--oro)", "★", "<b>Medaglie</b> per le sfide a casa: bronzo, argento e oro.")}${voce("var(--erba)", "+", "<b>Esultanze</b> e tanti premi nuovi sulla strada dei trofei.")}${voce("var(--coraggio)", "!", "<b>Il boss</b> cambia faccia quando lo colpite.")}</div>
+    ${retro.length ? `<p style="margin:0"><b>Con i trofei che hai già, questi sono tuoi:</b></p>${tesserePremi(retro)}<p class="fioco piccolo">Li trovi in Personalizza.</p>` : ""}<button class="btn pieno" data-act="chiudiFesta">Vediamo!</button>`;
+}
+// avviso piccolo in alto quando una statistica sale di livello mentre si gioca
+function salita(x, lv) {
+  let box = $("avvisi");
+  if (!box) { box = document.createElement("div"); box.id = "avvisi"; box.setAttribute("role", "status"); document.body.appendChild(box); }
+  const el = document.createElement("div"); el.className = "salita";
+  el.innerHTML = `<i style="background:${x.col}">▲</i><span><b>${x.nome}</b> livello ${lv}${lv === 5 ? ` · nuovo titolo «${esc(TITOLI_STAT[x.k])}»` : ""}</span>`;
+  box.appendChild(el); setTimeout(() => el.remove(), 4500);
+}
+
 /* ---------- novità e sblocchi (all'apertura) ---------- */
 function novita() {
-  const id = S.io.io.id, k = "ngu:visto:" + id, v = lgetJ(k, null);
-  const maxEv = Math.max(0, ...S.io.eventi.map(e => e.id), ...(S.io.gg_ricevuti || []).map(e => e.id));
-  if (!v) { lset(k, JSON.stringify({ trofei:S.c.trofei, ev:maxEv })); return; }
-  const nuoveStelle = S.io.eventi.filter(e => e.id > v.ev && (e.tipo === "stella" || e.tipo === "mossa" || e.tipo === "greencard"));
-  const nuoviGG = (S.io.gg_ricevuti || []).filter(e => e.id > v.ev);
+  const D = S.io, id = D.io.id, k = "ngu:visto:" + id, v = lgetJ(k, null);
+  const maxEv = Math.max(0, ...D.eventi.map(e => e.id), ...(D.gg_ricevuti || []).map(e => e.id));
+  const lvOra = Object.fromEntries(Object.entries(S.c.st).map(([n, s]) => [n, s.lv])), bossOra = D.boss_vinti || [];
+  const apertura = !V.aperto; V.aperto = true;
+  const salva = () => lset(k, JSON.stringify({ trofei:S.c.trofei, ev:maxEv, lv:lvOra, boss:bossOra }));
+  if (!v) { salva(); lset("ngu:v3:" + id, "1"); return; }
+  const nuoveStelle = D.eventi.filter(e => e.id > v.ev && (e.tipo === "stella" || e.tipo === "mossa" || e.tipo === "greencard" || e.tipo === "combine"));
+  const nuoviGG = (D.gg_ricevuti || []).filter(e => e.id > v.ev);
   const tappe = STRADA.filter(tp => tp.t > v.trofei && tp.t <= S.c.trofei);
-  lset(k, JSON.stringify({ trofei:S.c.trofei, ev:maxEv }));
-  if (!nuoveStelle.length && !nuoviGG.length && !tappe.length) return;
+  const saliti = v.lv ? [...AREE, ...PIEDI].filter(x => lvOra[x.k] > (v.lv[x.k] || 1)) : [];
+  const bossNuovi = v.boss ? bossOra.filter(m => !v.boss.includes(m)) : [];
+  const cresciuto = !lget("ngu:v3:" + id);      // giocava già prima della versione 3
+  if (cresciuto) lset("ngu:v3:" + id, "1");
+  salva();
+  // mentre si gioca i livelli nuovi sono un avviso piccolo; all'apertura entrano nell'elenco delle novità
+  if (!apertura) saliti.forEach(x => salita(x, lvOra[x.k]));
+  const livelli = apertura ? saliti : [];
+  if (!nuoveStelle.length && !nuoviGG.length && !tappe.length && !livelli.length && !bossNuovi.length && !cresciuto) return;
   const righe = [];
   for (const e of nuoveStelle) {
     if (e.tipo === "stella") { const a = AREA[e.dati.area], f = (FRASI[e.dati.area] || [])[e.dati.frase]; righe.push(`<div class="voce" style="text-align:left">${stellaIco(a.col)}<div><b style="color:${a.col}">Stella ${a.nome.toLowerCase()}</b><div>${esc(f ? f.k : "")}</div></div></div>`); }
     else if (e.tipo === "mossa") righe.push(`<div class="voce" style="text-align:left"><span class="pallino" style="background:var(--cielo)">M</span><div><b>Mossa sbloccata:</b> ${esc((MOSSA[e.dati.mossa] || {}).nome)}</div></div>`);
+    else if (e.tipo === "combine") { const p = PROVA[e.dati.prova]; if (p) righe.push(`<div class="voce" style="text-align:left"><span class="pallino" style="background:var(--motore)">C</span><div><b>Combine · ${esc(p.nome)}:</b> ${fmtVal(e.dati.valore, p.unita)}</div></div>`); }
     else righe.push(`<div class="voce" style="text-align:left"><span class="pallino" style="background:var(--erba)">G</span><div><b>Green Card!</b> Un gesto di fair play che vale ${T.greencard} trofei.</div></div>`);
   }
   for (const g of nuoviGG) righe.push(`<div class="voce" style="text-align:left"><span class="pallino" style="background:var(--squadra)">GG</span><div><b>${esc(g.da)}</b>: ${esc(GG_FRASI[g.dati.frase] || "")}</div></div>`);
+  for (const x of livelli) righe.push(`<div class="voce" style="text-align:left"><span class="pallino" style="background:${x.col}">▲</span><div><b>${x.nome}: livello ${lvOra[x.k]}</b>${lvOra[x.k] >= 5 && (v.lv[x.k] || 1) < 5 ? `<div>Nuovo titolo: «${esc(TITOLI_STAT[x.k])}»</div>` : ""}</div></div>`);
   const pagine = [];
+  // il boss battuto ha la sua schermata
+  if (bossNuovi.length) pagine.push({ html:festaBoss(bossNuovi[bossNuovi.length - 1]), suono:"fanfara" });
   // un grado nuovo ha la sua schermata; gli altri premi vanno nella schermata "Sbloccato!"
   const tGrado = [...tappe].reverse().find(tp => tp.grado);
   if (tGrado) pagine.push({ html:festaGrado(GRADI.find(g => g.k === tGrado.grado), tGrado.premi), suono:"grado" });
+  // una mossa nuova: il Fighter la fa vedere
+  const mosseNuove = nuoveStelle.filter(e => e.tipo === "mossa" && MOSSA[e.dati.mossa]);
+  if (mosseNuove.length) pagine.push({ html:festaMossa(mosseNuove[mosseNuove.length - 1].dati.mossa, mosseNuove.length - 1), suono:"stelle" });
   const premi = tappe.filter(tp => tp !== tGrado).flatMap(tp => tp.premi);
-  const elenco = righe.length ? `<div style="background:var(--pannello-2);border:3px solid #1E0B0A;border-radius:16px;padding:4px 12px;margin:10px 0 14px">${righe.slice(-4).join("")}${righe.length > 4 ? `<div class="voce fioco piccolo">e altre ${righe.length - 4} cose belle: le trovi nel tuo Fighter</div>` : ""}</div>` : "";
+  const elenco = righe.length ? `<div class="elenco-festa">${righe.slice(-4).join("")}${righe.length > 4 ? `<div class="voce fioco piccolo">e altre ${righe.length - 4} cose belle: le trovi nel tuo Fighter</div>` : ""}</div>` : "";
   if (premi.length) pagine.push({ html:raggi + coriandoli() + `<h2 class="d titolo-festa">Sbloccato!</h2>${figFesta()}${tesserePremi(premi)}<p class="fioco piccolo">Lo trovi in Personalizza.</p>${elenco}<button class="btn pieno" data-act="chiudiFesta">Grande!</button>`, suono:"fanfara" });
   else if (righe.length) pagine.push({ html:`<h2 class="d titolo-festa" style="font-size:32px">Novità per te</h2>${elenco}<button class="btn pieno" data-act="chiudiFesta">Grande!</button>`, suono:"stelle" });
+  if (cresciuto) pagine.push({ html:festaCresciuto(v.trofei), suono:"fanfara" });
   // all'apertura il telefono non lascia suonare finché non lo tocchi: prima un "Vediamo!"
   if (SUONI.acceso() && !SUONI.pronto()) {
     const n = t => nuoveStelle.filter(e => e.tipo === t).length;
-    const voci = [[n("stella"), "stella", "stelle"], [n("mossa"), "mossa", "mosse"], [n("greencard"), "Green Card", "Green Card"], [nuoviGG.length, "GG", "GG"], [tappe.reduce((x, tp) => x + tp.premi.length, 0), "premio", "premi"]]
-      .filter(x => x[0]).map(([q, uno, tanti]) => `<span>${q} ${q === 1 ? uno : tanti}</span>`).join("");
+    const voci = [[n("stella"), "stella", "stelle"], [n("mossa"), "mossa", "mosse"], [n("greencard"), "Green Card", "Green Card"], [nuoviGG.length, "GG", "GG"], [tappe.reduce((x, tp) => x + tp.premi.length, 0), "premio", "premi"], [bossNuovi.length ? 1 : 0, "boss battuto", "boss battuto"]]
+      .filter(x => x[0]).map(([q, uno, tanti]) => `<span>${q} ${q === 1 ? uno : tanti}</span>`).join("") + (cresciuto ? `<span>gioco nuovo</span>` : "");
     pagine.unshift({ html:`<h2 class="d titolo-festa" style="font-size:34px">Ci sono novità!</h2><div class="riassunto">${voci}</div><button class="btn pieno" data-act="chiudiFesta">Vediamo!</button>` });
   }
   pagine.forEach(p => festa(p.html, p.suono));
@@ -1772,7 +2113,7 @@ function volaPiu(n, verso) {
   });
 }
 async function contaTrofei() {
-  if (!S.c || S.modo !== "ragazzo") return;
+  if (!S.c || S.modo !== "ragazzo" || V.attendi) return;
   if (V.trofei == null || S.c.trofei <= V.trofei || riduci()) {
     const su = V.trofei != null && S.c.trofei > V.trofei;
     V.trofei = S.c.trofei; numTrofei(V.trofei); if (su) SUONI.suona("moneta"); return;
@@ -1842,7 +2183,8 @@ const ACT = {
   chiudiFesta:(d, el, ev) => { if (ev.target === el || el.tagName === "BUTTON") prossimaFesta(); },
   tab:d => { const nuovo = S.tab !== d.k; S.tab = d.k; S.anima = nuovo; render(); window.scrollTo(0, 0); if (nuovo) SUONI.suona("tocco"); animaBoss(); },
   suoni:() => { const on = SUONI.commuta(); render(); if (on) SUONI.suona("pop"); toast(on ? "Suoni accesi" : "Suoni spenti"); },
-  salta:(d, el) => { el.classList.remove("salta"); void el.getBoundingClientRect(); el.classList.add("salta"); SUONI.suona("boing"); },
+  salta:(d, el) => { esulta(el); SUONI.suona("boing"); },
+  faiMossa:(d, el) => { faiMossa(el); SUONI.suona("pop"); },
   missione:() => {
     const mis = areaMissione(S.io.ora.settimana);
     apri(() => `<button class="chiudi" data-act="chiudi" aria-label="Chiudi">✕</button><span class="area-chip" style="background:${mis.col}">Missione della settimana</span>
@@ -1898,6 +2240,7 @@ const ACT = {
     tgt[d.t] = (d.t === "pelle" || d.t === "colore") ? +d.k : d.k;
     SUONI.suona("pop");
     if (S.modo === "iscrizione") { render(); } else rifai();
+    if (d.t === "esultanza") esulta($("anteprima"));
   },
   personalizza:() => fPersonalizza(),
   salvaAvatar:async () => {
@@ -1926,7 +2269,7 @@ const ACT = {
     F.valore = val("valSfida");
     if (!/^\d{1,4}(\.\d{1,2})?$/.test(v) || +v <= 0) { F.err = msgErr("valore"); SUONI.suona("errore"); rifai(); return; }
     if (!/^\d{4}$/.test(pin)) { F.err = "Serve il PIN del genitore (4 cifre)."; SUONI.suona("errore"); rifai(); return; }
-    const prima = S.c.record[F.k];
+    const prima = S.c.record[F.k], medPrima = S.c.medaglie[F.k] || 0;
     const giaFatte = S.io.eventi.filter(e => e.tipo === "sfida" && e.settimana === S.io.ora.settimana).length;
     try {
       await azioneRagazzo("sfida", { sfida:F.k, valore:String(+(+v).toFixed(2)), pin });
@@ -1934,7 +2277,11 @@ const ACT = {
       const guadagno = (giaFatte < T.sfidaMax ? T.sfida : 0) + (rec ? T.record : 0);
       chiudi();
       if (rec) festa(festaRecord(s, +v, prima, guadagno), "record");
-      await caricaRagazzo();
+      V.attendi = true;                       // i trofei volano dopo l'eventuale festa della medaglia
+      try { await caricaRagazzo(); } finally { V.attendi = false; }
+      const med = S.c.medaglie[F.k] || 0;
+      if (med > medPrima) festa(festaMedaglia(s, MEDAGLIE[med - 1], S.c.giorni[F.k]), "fanfara");
+      contaTrofei();
       if (!rec) toast(guadagno ? "Sfida confermata!" : `Sfida confermata. I trofei delle sfide di questa settimana li hai già presi tutti: il record vale sempre.`);
     } catch (e) {
       F.err = e.message === "pin" ? `PIN sbagliato. Tentativi rimasti: ${e.r && e.r.tentativi != null ? e.r.tentativi : "pochi"}.` : msgErr(e.message); SUONI.suona("errore"); rifai();
@@ -1990,6 +2337,10 @@ const ACT = {
   },
   copiaRiep:() => condividi(testoRiep(), "Settimana"),
   salvaBoss:async () => { try { await azioneStaff("impostazioni", { premio:val("premio"), boss_nome:val("bossNome") }); await caricaStaff(); toast("Salvato"); } catch (e) { toast(msgErr(e.message)); } },
+  avvisaStelle:() => {
+    const D = S.staff, mis = areaMissione(D.ora.settimana);
+    condividi(`⭐ ${nomeGioco(D.squadra.impostazioni)}: le stelle di questa settimana sono nel gioco!\n\nMissione della settimana: ${mis.missione}.\nFate aprire il gioco ai ragazzi: ognuno trova la frase del mister, i suoi trofei e il suo Fighter aggiornato.\n\nOgnuno vede solo le sue stelle: niente classifiche.`, "Stelle messe");
+  },
   invitoGenitori:() => {
     const D = S.staff, link = `${baseUrl()}?s=${encodeURIComponent(SQ)}&i=${D.squadra.codice_invito}`;
     condividi(`⚽ ${nomeGioco(D.squadra.impostazioni)} — il gioco della squadra ${SQ}\n\nSi guadagnano trofei con impegno, coraggio, rispetto e spirito di squadra: in allenamento, in partita e con piccole sfide a casa. Gol e vittorie non contano.\n\nPer entrare aprite questo link insieme a vostro figlio (sul suo telefono o sul vostro):\n${link}\n\nLa prima schermata è per voi: scegliete un PIN di 4 cifre, serve a confermare le sfide fatte a casa. Poi lui crea il suo Fighter con la maglia granata.\n\nNiente chat e niente foto: solo un avatar e frasi positive già pronte. Dopo l'iscrizione lo faccio entrare io.`, "Invito");
