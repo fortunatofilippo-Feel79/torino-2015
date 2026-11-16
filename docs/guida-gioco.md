@@ -73,6 +73,18 @@ schermata. I trofei nuovi volano sulla coppa in alto e il boss trema quando la s
 - Chi giocava già trova una volta **Il gioco è cresciuto!**, con i premi nuovi che ha già
   guadagnato.
 
+**Dalla versione 4** (16 novembre 2026):
+
+- **Dodici sfide a casa**: sei nuove, con l'etichetta «nuova» finché non le provano.
+- **Sfida della settimana**: ogni lunedì ce n'è una in evidenza, che vale 5 trofei in più la
+  prima volta che la fanno. Parte dal lunedì dopo l'aggiornamento.
+- **Obiettivo della settimana**: lo scelgono nei primi giorni e **da venerdì a domenica** dicono
+  com'è andata (5 trofei, qualunque risposta). Non possono farlo nel giorno in cui lo scelgono.
+  Se un ragazzo dice che «non trova i tasti», è perché non è ancora venerdì.
+- **Record**: i trofei del record valgono solo in una delle prime tre sfide della settimana. La
+  festa del record c'è sempre.
+- **Boss**: adesso lo colpisce davvero ogni trofeo, anche i record e il bonus della fantasquadra.
+
 **Suoni**: ci sono solo nell'app dei ragazzi, non in quella del mister e del dirigente. Il
 ragazzo li spegne con l'altoparlante in alto; su iPhone tacciono anche con il tasto
 silenzioso. Il timer delle sfide fischia all'inizio e alla fine.

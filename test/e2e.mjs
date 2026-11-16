@@ -7,8 +7,17 @@ fs.mkdirSync(new URL('./shots/', import.meta.url), { recursive: true });
 import { nuovoDb } from './db.mjs';
 import { avvia, BASE } from './browser.mjs';
 const db = await nuovoDb();
+// il collaudo decide che giorno è (1 lunedì … 7 domenica): in produzione lo dice l'orologio di Roma
+const giorno = n => db.exec(`create or replace function public.gioco_giorno(p_ts timestamptz default now()) returns integer language sql stable set search_path = '' as $$ select ${n} $$`);
+await giorno(3);
+// la sfida della settimana cambia ogni lunedì: il collaudo usa per medaglia e record due sfide diverse da quella
+const SETT = (await db.query(`select public.gioco_sfida_settimana(public.gioco_settimana()) k`)).rows[0].k;
+const MURO = SETT === 'muro_d' ? 'muro_f' : 'muro_d', REC = SETT === 'palleggi' ? 'suola' : 'palleggi';
 const { browser, contesto, errori } = await avvia(db);
 const shot = async (page, n) => { await page.waitForTimeout(250); await page.screenshot({ path: new URL(`./shots/${n}.png`, import.meta.url).pathname, fullPage: false }); console.log('foto', n); };
+// chiude le feste una dopo l'altra e dice se tra loro c'era quella cercata (con la sua foto)
+const festeFino = async (page, sel, foto) => { let vista = false; await page.waitForSelector('.festa .btn', { timeout: 5000 }).catch(() => {});
+  while (await page.$('.festa .btn')) { if (await page.$(sel)) { vista = true; await page.waitForTimeout(650); if (foto) await shot(page, foto); } await page.click('.festa .btn'); await page.waitForTimeout(350); } return vista; };
 // chiude le feste a schermo intero (una dopo l'altra), con una foto per ciascuna se serve
 const feste = async (page, nome) => { let i = 0; while (await page.$('.festa .btn')) { if (nome) await shot(page, `${nome}${String.fromCharCode(97 + i)}`); i++; await page.click('.festa .btn'); await page.waitForTimeout(350); } return i; };
 // conta gli oscillatori creati: se un suono parte davvero, il numero sale
@@ -102,14 +111,14 @@ await db.exec(`
          public.gioco_settimana(now() - (g || ' weeks')::interval), public.gioco_mese(now() - (g || ' weeks')::interval), now() - (g || ' weeks')::interval
   from generate_series(1,7) g;
   insert into public.gioco_eventi (squadra, giocatore, tipo, dati, autore, settimana, mese, creato)
-  select '2015', '${idLucky}', 'sfida', jsonb_build_object('sfida','palleggi','valore', 10+g*3), 'genitore',
+  select '2015', '${idLucky}', 'sfida', jsonb_build_object('sfida','${REC}','valore', 10+g*3), 'genitore',
          public.gioco_settimana(now() - (g || ' weeks')::interval), public.gioco_mese(now() - (g || ' weeks')::interval), now() - (g || ' weeks')::interval - interval '1 day'
   from generate_series(1,6) g;
   insert into public.gioco_eventi (squadra, giocatore, tipo, dati, autore, settimana, mese, creato)
   select '2015', '${idLucky}', 'mossa', jsonb_build_object('mossa', m), 'mister', public.gioco_settimana(now() - interval '3 weeks'), public.gioco_mese(now() - interval '3 weeks'), now() - interval '3 weeks'
   from unnest(array['finta','stop','suola']) m;
   insert into public.gioco_eventi (squadra, giocatore, tipo, dati, autore, settimana, mese, creato)
-  values ('2015', '${idLucky}', 'sfida', jsonb_build_object('sfida','muro_d','valore', 20), 'genitore',
+  values ('2015', '${idLucky}', 'sfida', jsonb_build_object('sfida','${MURO}','valore', 20), 'genitore',
           public.gioco_settimana(now() - interval '9 days'), public.gioco_mese(now() - interval '9 days'), now() - interval '9 days');
 `);
 // compagni con qualche evento: sfide e stelle (per trio e boss)
@@ -144,7 +153,18 @@ await K.page.click('[data-act=chiudi]');
 // sfide
 await K.page.click('[data-act=tab][data-k=sfide]');
 await shot(K.page, '15-ragazzo-sfide');
-await K.page.click('[data-act=sfida][data-k=muro_d]');
+// sfida della settimana: in evidenza in cima, 5 trofei in più la prima volta
+{ const prima = await K.page.evaluate(() => ({ t: S.c.trofei, k: sfidaSettimana(S.io.ora.settimana).k, nuove: document.querySelectorAll('.tessera .badge.nuova').length, attiva: regole4(S.io.ora.settimana) }));
+  await K.page.click('.pan.sett'); await K.page.waitForSelector('#valSfida');
+  await K.page.fill('#valSfida', '15'); await K.page.fill('#pinSfida', '1234'); await K.page.click('[data-act=salvaSfida]');
+  await K.page.waitForSelector('.pan.sett.fatta'); const avviso = await K.page.evaluate(() => document.getElementById('toast').textContent);
+  await feste(K.page); await K.page.waitForTimeout(300);
+  const dopo = await K.page.evaluate(() => ({ t: S.c.trofei, nuove: document.querySelectorAll('.tessera .badge.nuova').length }));
+  console.log(prima.attiva && prima.k === SETT && dopo.t === prima.t + 10 && avviso.includes('Sfida della settimana fatta') ? `ok - sfida della settimana (${SETT}): 5 + 5 trofei la prima volta` : 'FALLITO sfida della settimana ' + JSON.stringify({ prima, dopo, avviso, SETT }));
+  console.log(prima.nuove >= 5 && prima.nuove <= 6 ? `ok - le sfide nuove mai provate hanno l'etichetta «nuova» (${prima.nuove})` : 'FALLITO etichette nuova ' + prima.nuove);
+  await K.page.evaluate(() => window.scrollTo(0, 0)); await shot(K.page, '15b-sfida-della-settimana-fatta');
+  await K.page.waitForTimeout(2400); }
+await K.page.click(`[data-act=sfida][data-k=${MURO}]`);
 await K.page.waitForSelector('[data-act=timer30]');
 await K.page.click('[data-act=timer30]');
 await K.page.waitForTimeout(2100);
@@ -154,19 +174,17 @@ await K.page.fill('#valSfida', '12'); await K.page.fill('#pinSfida', '9999');
 await K.page.click('[data-act=salvaSfida]'); await K.page.waitForSelector('.foglio .errore');
 await shot(K.page, '17-sfida-pin-errato');
 await K.page.fill('#pinSfida', '1234'); await K.page.click('[data-act=salvaSfida]');
-await K.page.waitForSelector('.festa .medagliona', { timeout: 5000 }).then(() => console.log('ok - secondo giorno della stessa sfida: festa della medaglia di bronzo')).catch(() => console.log('FALLITO festa della medaglia'));
-await K.page.waitForTimeout(700);
-await shot(K.page, '17b-medaglia');
-await feste(K.page);
+console.log(await festeFino(K.page, '.festa .medagliona', '17b-medaglia') ? 'ok - secondo giorno della stessa sfida: festa della medaglia di bronzo' : 'FALLITO festa della medaglia');
 await K.page.waitForTimeout(2400);
-{ const r = await K.page.evaluate(() => ({ tessere: document.querySelectorAll('.tessera .med').length, muro: S.c.medaglie.muro_d, palleggi: S.c.medaglie.palleggi, giorni: S.c.giorni.palleggi }));
-  console.log(r.tessere === 6 && r.muro === 1 && r.palleggi === 2 && r.giorni === 6 ? 'ok - medaglie sulle tessere: muro debole bronzo, palleggi argento (6 giorni)' : 'FALLITO medaglie ' + JSON.stringify(r)); }
-await K.page.click('[data-act=sfida][data-k=palleggi]');
+{ const r = await K.page.evaluate(([MURO, REC]) => ({ tessere: document.querySelectorAll('.tessera .med').length, muro: S.c.medaglie[MURO], rec: S.c.medaglie[REC], giorni: S.c.giorni[REC] }), [MURO, REC]);
+  console.log(r.tessere === 12 && r.muro === 1 && r.rec === 2 && r.giorni === 6 ? `ok - medaglie sulle 12 tessere: ${MURO} bronzo, ${REC} argento (6 giorni)` : 'FALLITO medaglie ' + JSON.stringify(r)); }
+await K.page.click(`[data-act=sfida][data-k=${REC}]`);
 await K.page.waitForSelector('.foglio .grafico polyline');
 { const r = await K.page.evaluate(() => ({ prese: document.querySelectorAll('.foglio .medaglie .presa').length, punti: document.querySelectorAll('.foglio .grafico circle').length }));
   console.log(r.prese === 2 && r.punti === 6 ? 'ok - nel foglio della sfida: due medaglie prese e grafico con i 6 risultati' : 'FALLITO foglio sfida ' + JSON.stringify(r));
   await K.page.evaluate(() => { const f = document.querySelector('.foglio'); f.scrollTop = f.scrollHeight; }); await shot(K.page, '17c-sfida-medaglie-grafico');
   await K.page.evaluate(() => { document.querySelector('.foglio').scrollTop = 0; }); }
+// terza sfida della settimana, con record: è nelle prime tre, quindi il record vale ancora 5 trofei
 await K.page.fill('#valSfida', '41'); await K.page.fill('#pinSfida', '1234'); await K.page.click('[data-act=salvaSfida]');
 await K.page.waitForSelector('.festa .gigante'); await K.page.waitForTimeout(700);
 await shot(K.page, '18-record');
@@ -175,8 +193,34 @@ await feste(K.page);
 await K.page.waitForTimeout(250);
 await shot(K.page, '18b-trofei-volano');
 await K.page.waitForTimeout(2200);
-await K.page.click('[data-act=obiettivo][data-k=debole]'); await K.page.waitForTimeout(300);
-await K.page.click('[data-act=autoval][data-k=quasi]'); await K.page.waitForTimeout(300);
+// quarta sfida della settimana con un altro record: festa sì, trofei no (regole nuove)
+{ const prima = await K.page.evaluate(() => S.c.trofei);
+  await K.page.click(`[data-act=sfida][data-k=${REC}]`); await K.page.waitForSelector('#valSfida');
+  await K.page.fill('#valSfida', '45'); await K.page.fill('#pinSfida', '1234'); await K.page.click('[data-act=salvaSfida]');
+  await K.page.waitForSelector('.festa .gigante'); const conTrofei = !!(await K.page.$('.festa .guadagno')); await feste(K.page); await K.page.waitForTimeout(600);
+  const dopo = await K.page.evaluate(([REC]) => ({ t: S.c.trofei, rec: S.c.record[REC] }), [REC]);
+  console.log(dopo.t === prima && dopo.rec === 45 && !conTrofei ? 'ok - record oltre le prime tre sfide della settimana: il record resta, i trofei no' : 'FALLITO record oltre le tre: ' + JSON.stringify({ prima, dopo, conTrofei })); }
+// obiettivo: di mercoledì si sceglie ma non si può ancora dire com'è andata
+await K.page.click('[data-act=obiettivo][data-k=debole]'); await K.page.waitForSelector('.aspetta');
+{ const r = await K.page.evaluate(() => ({ testo: document.querySelector('.aspetta').textContent, tasti: document.querySelectorAll('[data-act=autoval]').length }));
+  console.log(r.tasti === 0 && r.testo.includes('Da venerdì') ? 'ok - obiettivo scelto di mercoledì: «Da venerdì torna qui», nessun tasto' : 'FALLITO obiettivo di mercoledì ' + JSON.stringify(r));
+  await K.page.evaluate(() => document.querySelector('.aspetta').scrollIntoView({ block: 'center' })); await shot(K.page, '19a-obiettivo-aspetta'); }
+// venerdì, ma l'obiettivo è stato scelto oggi: ancora no
+await giorno(5); await K.page.reload(); await K.page.waitForSelector('.eroe'); await feste(K.page);
+await K.page.click('[data-act=tab][data-k=sfide]'); await K.page.waitForSelector('.aspetta');
+{ const r = await K.page.evaluate(() => ({ testo: document.querySelector('.aspetta').textContent, tasti: document.querySelectorAll('[data-act=autoval]').length }));
+  const sql = (await db.query(`select public.gioco_ragazzo($1, 'autovalutazione', '{"esito":"fatto"}') r`, [new URL(K.page.url()).searchParams.get('t')])).rows[0].r;
+  console.log(r.tasti === 0 && r.testo.includes('scelto oggi') && sql.errore === 'oggi' ? 'ok - venerdì con obiettivo scelto oggi: né l\'app né il database lasciano autovalutarsi' : 'FALLITO obiettivo scelto oggi ' + JSON.stringify(r) + JSON.stringify(sql)); }
+// venerdì, obiettivo scelto ieri: adesso sì
+await db.query(`update public.gioco_eventi set creato = creato - interval '1 day' where giocatore = $1 and tipo = 'obiettivo'`, [idLucky]);
+await K.page.reload(); await K.page.waitForSelector('.eroe'); await feste(K.page);
+{ const t = await K.page.evaluate(() => [...document.querySelectorAll('.trag')].map(b => b.textContent).join(' | '));
+  console.log(t.includes('andato il tuo obiettivo') ? 'ok - da venerdì tra i traguardi c\'è «Com\'è andato il tuo obiettivo?»' : 'FALLITO traguardo dell\'obiettivo: ' + t); }
+await K.page.click('[data-act=tab][data-k=sfide]'); await K.page.waitForSelector('[data-act=autoval]');
+{ const prima = await K.page.evaluate(() => S.c.trofei);
+  await K.page.click('[data-act=autoval][data-k=quasi]'); await K.page.waitForTimeout(400);
+  console.log((await K.page.evaluate(() => S.c.trofei)) === prima + 5 ? 'ok - autovalutazione di venerdì: 5 trofei' : 'FALLITO autovalutazione'); }
+await spia(K.page);
 await full(K.page, '19-ragazzo-sfide-dopo');
 // squadra: gg
 await K.page.click('[data-act=tab][data-k=squadra]');
@@ -208,7 +252,17 @@ await shot(K.page, '22d-mossa-chiusa'); await K.page.click('[data-act=chiudi]');
   console.log(!r.mosse.length && !r.es.length ? 'ok - ogni mossa e ogni esultanza ha il suo movimento' : 'FALLITO movimenti mancanti: ' + JSON.stringify(r));
   console.log(r.strada && r.buco <= 125 && !r.premi.length ? `ok - strada dei trofei in ordine, al massimo ${r.buco} trofei tra un premio e l'altro, tutti i premi esistono` : 'FALLITO strada ' + JSON.stringify(r)); }
 { const r = await K.page.evaluate(() => ({ sfide: SFIDE.filter(s => !DIS_SFIDA[s.k]).map(s => s.k), mosse: MOSSE.filter(m => !DIS_MOSSA[m.k]).map(m => m.k) }));
-  console.log(!r.sfide.length && !r.mosse.length ? 'ok - ogni sfida e ogni mossa ha il suo disegno' : 'FALLITO disegni mancanti: ' + JSON.stringify(r)); }
+  console.log(!r.sfide.length && !r.mosse.length ? 'ok - ogni sfida e ogni mossa ha il suo disegno' : 'FALLITO disegni mancanti: ' + JSON.stringify(r));
+  // app e database devono avere le stesse sfide, lo stesso giro della sfida della settimana e le stesse sfide «a tempo»
+  const app = await K.page.evaluate(() => ({ sfide: SFIDE.map(s => s.k).sort(), meno: SFIDE.filter(s => s.verso < 0).map(s => s.k).sort(), proveMeno: PROVE.filter(p => p.verso < 0).map(p => p.k).sort(),
+    giro: Array.from({ length: 60 }, (_, i) => sfidaSettimana('2027-W' + String(i % 52 + 1).padStart(2, '0')).k), mesi: ['2026-W47', '2026-W49', '2026-W53', '2027-W01', '2027-W13'].map(meseSettimana) }));
+  const sql = (await db.query(`select (select array_agg(x order by x) from unnest(public.gioco_ammessi('sfide')) x) sfide, (select array_agg(x order by x) from unnest(public.gioco_ammessi('sfide_meno')) x) meno,
+    (select array_agg(x order by x) from unnest(public.gioco_ammessi('prove_meno')) x) prove_meno,
+    (select array_agg(public.gioco_sfida_settimana('2027-W' || lpad((i % 52 + 1)::text, 2, '0')) order by i) from generate_series(0, 59) i) giro,
+    (select array_agg(public.gioco_mese_settimana(w) order by n) from unnest(array['2026-W47', '2026-W49', '2026-W53', '2027-W01', '2027-W13']) with ordinality u(w, n)) mesi`)).rows[0];
+  console.log(JSON.stringify(app) === JSON.stringify({ sfide: sql.sfide, meno: sql.meno, proveMeno: sql.prove_meno, giro: sql.giro, mesi: sql.mesi })
+    ? 'ok - app e database d\'accordo: 12 sfide, sfide e prove a tempo, giro della sfida della settimana, mese di ogni settimana' : 'FALLITO app e database diversi: ' + JSON.stringify(app) + ' / ' + JSON.stringify(sql));
+  await K.page.click('[data-act=tab][data-k=sfide]'); await full(K.page, '22a-dodici-sfide'); await K.page.click('[data-act=tab][data-k=strada]'); }
 // suoni spenti: l'altoparlante in alto li ferma davvero
 { await K.page.click('[data-act=suoni]'); await K.page.waitForTimeout(200);
   const prima = await K.page.evaluate(() => window.__osc);
@@ -262,14 +316,16 @@ await shot(K.page, '24b-esultanza');
   await F.ctx.close(); }
 // chi giocava già prima della versione 3 trova una volta sola «Il gioco è cresciuto!» con i premi già guadagnati
 { const attesi = await K.page.evaluate(() => STRADA.filter(tp => tp.n === 3 && tp.t <= S.c.trofei).flatMap(tp => tp.premi).length);
-  await K.page.evaluate(id => localStorage.removeItem('ngu:v3:' + id), idLucky);
+  await K.page.evaluate(id => { localStorage.removeItem('ngu:v3:' + id); localStorage.removeItem('ngu:v4:' + id); }, idLucky);
   await K.page.reload(); await K.page.waitForSelector('.festa');
-  let visto = null, n = 0;
+  let visto = null, n = 0, sfideNuove = false;
   while (await K.page.$('.festa .btn')) { const t = await K.page.evaluate(() => document.querySelector('.festa .scatola').textContent);
+    if (t.includes('Sfide nuove!')) { sfideNuove = true; await shot(K.page, '31b-sfide-nuove'); }
     if (t.includes('Il gioco è cresciuto')) { visto = await K.page.evaluate(() => document.querySelectorAll('.festa .premio').length); await shot(K.page, '31-gioco-cresciuto'); }
     n++; await K.page.click('.festa .btn'); await K.page.waitForTimeout(350); }
   await K.page.reload(); await K.page.waitForSelector('.eroe'); await K.page.waitForTimeout(400);
-  console.log(visto === attesi && attesi >= 2 && !(await K.page.$('.festa .btn')) ? `ok - «Il gioco è cresciuto!» compare una volta sola, con i ${attesi} premi nuovi già guadagnati` : 'FALLITO gioco cresciuto: premi ' + visto + ' attesi ' + attesi + ', feste ' + n); }
+  console.log(visto === attesi && attesi >= 2 && !(await K.page.$('.festa .btn')) ? `ok - «Il gioco è cresciuto!» compare una volta sola, con i ${attesi} premi nuovi già guadagnati` : 'FALLITO gioco cresciuto: premi ' + visto + ' attesi ' + attesi + ', feste ' + n);
+  console.log(sfideNuove ? 'ok - «Sfide nuove!» compare una volta sola a chi giocava già' : 'FALLITO avviso delle sfide nuove'); }
 // boss battuto: schermata intera alla prossima apertura
 { await db.query(`update public.gioco_squadre set impostazioni = jsonb_set(impostazioni, '{hp}', '1')`);   // energia al minimo (300)
   await db.query(`insert into public.gioco_eventi (squadra, giocatore, tipo, dati, autore, settimana, mese)
@@ -281,6 +337,25 @@ await shot(K.page, '24b-esultanza');
   const dopo = await K.page.evaluate(() => S.c.trofei);
   console.log(visto && dopo === prima + 20 ? 'ok - boss battuto: festa «Sconfitto!» all\'apertura e 20 trofei in più' : 'FALLITO festa del boss battuto: vista ' + visto + ', trofei ' + prima + ' → ' + dopo);
   await K.page.click('[data-act=tab][data-k=squadra]'); await K.page.waitForTimeout(300); await shot(K.page, '32b-squadra-boss-battuto'); }
+// l'energia tolta al boss: per ogni ragazzo e per ogni mese il conto dell'app (calcola) deve essere quello del database (gioco_danni)
+{ // casi difficili su altri ragazzi: sfida della settimana fatta due volte, record oltre le tre sfide, record a tempo,
+  // una settimana con le regole di prima, record del combine, e fantasquadre col bonus (tutti con una sfida e una stella)
+  const ids = Object.fromEntries((await db.query(`select soprannome, id from public.gioco_giocatori`)).rows.map(r => [r.soprannome, r.id]));
+  const ev = (g, tipo, dati, giorniFa = 0, autore = 'genitore') => db.query(`insert into public.gioco_eventi (squadra, giocatore, tipo, dati, autore, settimana, mese, creato)
+    values ('2015', $1, $2, $3, $4, public.gioco_settimana(now() - $5::interval), public.gioco_mese(now() - $5::interval), now() - $5::interval)`, [g, tipo, JSON.stringify(dati), autore, giorniFa + ' days']);
+  for (const v of [10, 12]) await ev(ids.Nico, 'sfida', { sfida: SETT, valore: v });                       // la seconda volta niente 5 in più
+  for (const v of [30, 20, 18, 19, 17]) await ev(ids.Nico, 'sfida', { sfida: 'spola', valore: v });      // a tempo: meno è meglio
+  for (const v of [5, 6, 7, 8, 9]) await ev(ids.Edo, 'sfida', { sfida: 'bersaglio', valore: v }, 21);     // tre settimane fa: regole di prima
+  for (const v of [5.2, 4.9, 5.0]) await ev(ids.Edo, 'combine', { prova: 'sprint', valore: v }, 0, 'mister');
+  for (const v of [12, 15]) await ev(ids.Edo, 'combine', { prova: 'palleggi', valore: v }, 0, 'mister');
+  for (const g of Object.values(ids)) { await ev(g, 'sfida', { sfida: 'stop', valore: 4 }); await ev(g, 'stella', { area: 'impegno', frase: 0 }, 0, 'mister').catch(() => {}); }
+  await D.page.reload(); await D.page.waitForSelector('[data-act=stab]');
+  const mesi = (await db.query(`select distinct mese from public.gioco_eventi union select public.gioco_mese_settimana(public.gioco_settimana())`)).rows.map(r => r.mese);
+  const app = await D.page.evaluate(() => { const X = datiStaff(); return { calc: Object.fromEntries(X.attivi.map(g => [g.id, X.calc[g.id].mesi])), bonus: S.staff.trii.filter(t => t.bonus).length, r4: R4 }; });
+  const diversi = []; let somma = 0;
+  for (const m of mesi) { const sql = Object.fromEntries((await db.query(`select giocatore, trofei from public.gioco_danni('2015', $1)`, [m])).rows.map(r => [r.giocatore, r.trofei]));
+    for (const [g, c] of Object.entries(app.calc)) { somma += sql[g] || 0; if ((c[m] || 0) !== (sql[g] || 0)) diversi.push([Object.keys(ids).find(k => ids[k] === g), m, c[m] || 0, sql[g] || 0]); } }
+  console.log(!diversi.length && app.bonus >= 5 && mesi.length >= 2 && somma > 500 ? `ok - energia tolta al boss: app e database danno lo stesso numero per ${Object.keys(app.calc).length} ragazzi in ${mesi.length} mesi (${somma} in tutto, ${app.bonus} bonus fantasquadra)` : 'FALLITO energia del boss diversa (ragazzo, mese, app, database): ' + JSON.stringify(diversi) + ' ' + JSON.stringify({ bonus: app.bonus, mesi, somma })); }
 // 6. dirigente: riepilogo e immagine
 await D.page.reload(); await D.page.waitForSelector('[data-act=stab]');
 await D.page.click('[data-act=stab][data-k=squadra]');

@@ -1,7 +1,9 @@
 # Gioco NEVER GIVE UP — manuale tecnico
 
-Versione 3, 15 novembre 2026 (il Fighter fa mosse ed esultanze, medaglie, traguardi, strada più
-fitta, boss a fasi). Versione 2 del 2 novembre 2026 (grafica, movimento e suoni). Versione 1
+Versione 4, 16 novembre 2026 (sei sfide nuove, sfida della settimana, autovalutazione dal
+venerdì, record solo nelle prime tre sfide, il boss conta ogni trofeo: **cambia lo SQL**).
+Versione 3 del 15 novembre 2026 (il Fighter fa mosse ed esultanze, medaglie, traguardi, strada
+più fitta, boss a fasi). Versione 2 del 2 novembre 2026 (grafica, movimento e suoni). Versione 1
 online dal 2 novembre 2026.
 Da leggere prima di ogni modifica al gioco.
 Questa è la copia di riferimento: sta nel repository accanto al codice e si aggiorna nella
@@ -26,7 +28,11 @@ movimento e suoni».
 Dalla versione 3 c'è più da fare e più da guadagnare: il Fighter fa davvero le mosse che il
 mister sblocca, ogni sfida a casa ha tre medaglie, la strada dei trofei ha un premio ogni 125
 trofei al massimo, il boss cambia faccia, la pagina Fighter dice cosa si può fare adesso.
-Vedi «Versione 3». Il database non è cambiato: **non c'è SQL da rilanciare**.
+Vedi «Versione 3». Con la versione 3 il database non è cambiato.
+
+Dalla versione 4 le sfide a casa sono dodici, ogni lunedì ce n'è una «della settimana» che
+vale di più, e sono corretti tre difetti di regole. Vedi «Versione 4». **Lo SQL è cambiato e
+va rilanciato in Supabase prima di approvare la pull request.**
 
 ## File
 
@@ -76,7 +82,7 @@ Dopo 8 PIN sbagliati il PIN si blocca: il dirigente ne imposta uno nuovo.
 
 | Tabella | Contenuto |
 |---|---|
-| `gioco_squadre` | una riga per annata: codice invito, codice mister, impostazioni |
+| `gioco_squadre` | una riga per annata: codice invito, codice mister, impostazioni (tra cui `regole4`: la settimana da cui valgono le regole della versione 4) |
 | `gioco_giocatori` | ragazzi: nome della rosa, soprannome, numero, avatar, stato (attesa · attivo · sospeso) |
 | `gioco_eventi` | tutto ciò che succede: stella, mossa, sfida, obiettivo, autovalutazione, gg, combine, greencard |
 | `gioco_trii` | fantasquadre di ogni settimana |
@@ -98,6 +104,7 @@ del combine né chi è il figlio del dirigente.
 | stella del mister | 10, o 15 se è l'area della missione della settimana |
 | mossa speciale sbloccata | 30 |
 | sfida a casa (solo le prime 3 della settimana) | 5, +5 se batte il record |
+| sfida della settimana (versione 4) | 5 in più, la prima volta che la fa in quella settimana |
 | autovalutazione dell'obiettivo | 5, qualunque risposta |
 | GG mandato / ricevuto | 2 / 3 |
 | combine | 5 a prova, +10 se batte il record |
@@ -107,6 +114,9 @@ del combine né chi è il figlio del dirigente.
 
 **Limiti**: una stella per area, per ragazzo, per settimana. Una mossa si sblocca una volta.
 Un GG a settimana per ogni compagno della fantasquadra. Massimo 30 azioni al giorno per ragazzo.
+L'autovalutazione si fa da venerdì a domenica, e non nello stesso giorno in cui si è scelto
+l'obiettivo. Dalla versione 4 il +5 del record vale solo in una delle prime tre sfide della
+settimana (il record resta comunque, e conta per medaglie e statistiche).
 
 **Gradi**: Rookie 0, Fighter 150, Warrior 450, Champion 950, Legend 1500.
 La strada dei trofei arriva a 2000 (costante `STRADA`): 31 tappe, al massimo 125 trofei tra
@@ -122,7 +132,7 @@ visione. Ogni stella fa crescere la sua area (+3) e la statistica "piedi" legata
 scelta (+2). Livello = 1 + punti/4. Livello 5 sblocca un titolo.
 
 **Titoli**: i gradi, il livello 5 di una statistica, «Cartellino verde» con una Green Card,
-«Tuttofare» con il bronzo in tutte le sfide, «Mai fermo» con l'oro in tre sfide, più i titoli
+«Tuttofare» con il bronzo in tutte le sfide (dodici, dalla versione 4), «Mai fermo» con l'oro in tre sfide, più i titoli
 della strada («Bandiera granata» a 1875, «Never Give Up» a 2000).
 
 **Missione della settimana**: a rotazione impegno (NON MOLLO), coraggio (CI PROVO),
@@ -133,7 +143,9 @@ sorteggiati. Chi entra a settimana iniziata va nel gruppo più piccolo (nuovo gr
 tutti hanno già 3). Bonus se tutti, almeno in due, hanno una sfida e una stella.
 
 **Boss**: energia = 150 × ragazzi attivi (minimo 300), modificabile nelle impostazioni.
-Ogni trofeo del mese toglie energia. È sconfitto quando l'energia è finita **e** tutti i
+Ogni trofeo del mese toglie energia: dalla versione 4 anche i bonus dei record (sfide e
+combine) e il bonus fantasquadra, che conta nel mese in cui cade la domenica di quella
+settimana. Solo il premio del boss stesso non conta. È sconfitto quando l'energia è finita **e** tutti i
 ragazzi in squadra da almeno 7 giorni hanno fatto almeno una cosa nel mese.
 Ha quattro fasi, a seconda dell'energia rimasta: sopra il 75% «È ancora in forma», sopra il
 50% «Comincia a scricchiolare», sopra il 25% «È a metà: ha paura!», sotto «Sta per cedere!».
@@ -199,6 +211,36 @@ scatti. Si usano le Web Animations del browser; con «riduci movimento» non par
 **Attenzione al nome `.campo`**: è lo stile delle caselle di testo. Il campetto delle mosse si
 chiama `.campetto`.
 
+## Versione 4: sfide nuove e tre regole corrette
+
+**Lo SQL è cambiato.** Va lanciato in Supabase › SQL Editor **prima** di approvare la pull
+request. Si può rilanciare senza perdere dati (il collaudo lo fa due volte e conta le righe).
+
+| Cosa | Dove | Come funziona |
+|---|---|---|
+| Sei sfide nuove | `SFIDE` e `DIS_SFIDA` in `gioco.html`, `gioco_ammessi('sfide')` nello SQL | Otto tra 2 bottiglie, Palleggi piede debole, Dentro-fuori, Tiro al bersaglio, Spola con la palla, Alza e stoppa. Finché il ragazzo non le prova hanno l'etichetta «nuova» |
+| Sfida della settimana | `SFIDA_GIRO`, `sfidaSettimana()`; `gioco_sfida_settimana()` nello SQL | una sfida a rotazione ogni lunedì (dodici settimane, dodici sfide). In evidenza in cima alla pagina Sfide e tra i traguardi. 5 trofei in più la prima volta che la si fa nella settimana |
+| Autovalutazione dal venerdì | `tSfide()`, `giornoSett()`; `gioco_giorno()` e `gioco_ragazzo()` nello SQL | i tasti «Fatto · Quasi · Non ancora» compaiono da venerdì a domenica, e non nel giorno in cui si è scelto l'obiettivo. Prima c'è scritto quando tornare. Il database rifiuta comunque (`presto`, `oggi`) |
+| Record nelle prime tre sfide | `calcola()`; `gioco_danni()` nello SQL | il +5 del record vale solo se la sfida è una delle prime tre della settimana. La festa del record c'è sempre |
+| Il boss conta ogni trofeo | `gioco_danni()` nello SQL; `calcola()` → `mesi` | record delle sfide, record del combine e bonus fantasquadra ora tolgono energia. `mieiDanni()` legge `mesi` da `calcola()`: un conto solo nell'app |
+| «Sfide nuove!» | `festaSfideNuove()` | una volta sola (`localStorage` `ngu:v4:ID`) a chi giocava già |
+
+**Da quando valgono le regole nuove sui trofei.** Il record nelle prime tre e la sfida della
+settimana cambiano i trofei, quindi non valgono all'indietro: partono dalla settimana scritta
+in `gioco_squadre.impostazioni.regole4`. Lo SQL la scrive da solo la prima volta che viene
+lanciato: il lunedì successivo per le squadre che giocano già, subito per quelle attivate
+dopo. Rilanciare lo SQL non la sposta. Se manca, le regole nuove non valgono (così in `R4_MAI`
+nell'app e in `gioco_danni()`). Nessun ragazzo perde trofei già presi.
+Le sfide nuove, l'autovalutazione dal venerdì e il boss che conta tutto valgono subito.
+
+**Ordine giusto**: prima lo SQL, poi l'approvazione. Con lo SQL nuovo e l'app vecchia (i
+minuti tra le due cose) chi prova ad autovalutarsi prima di venerdì vede «Qualcosa non va
+(presto)». Con l'app nuova e lo SQL vecchio le sfide nuove darebbero errore.
+
+**Il collaudo decide che giorno è.** `gioco_giorno()` dice il giorno della settimana a Roma.
+I due collaudi la sostituiscono con una versione fissa (mercoledì, venerdì) per provare le
+regole in qualunque giorno li si lanci; la funzione vera è provata a parte con date precise.
+
 ## Cosa succede da solo
 
 Nessun programma pianificato da mantenere: è tutto calcolato quando qualcuno apre l'app.
@@ -242,6 +284,10 @@ possa rieseguire senza perdere dati.
   disegno in `DIS_SFIDA` o `DIS_MOSSA`. Senza, compare solo una palla e il collaudo lo segnala.
   Per una mossa aggiungi anche il movimento in `MOSSA_ANIM` (il collaudo segnala se manca) e
   guarda i fotogrammi in `test/shots/30-fotogrammi-mosse.png`.
+  Per una sfida aggiungi la chiave anche al giro della sfida della settimana, nello stesso
+  ordine in `SFIDA_GIRO` (app) e in `gioco_sfida_settimana()` (SQL, dove va cambiato anche il
+  12 del resto); se è a tempo («meno è meglio», `verso:-1`) anche in
+  `gioco_ammessi('sfide_meno')`. Il collaudo confronta app e database su tutto questo.
 - **Nuova esultanza**: `ESULTANZE` (nome), `ES_ANIM` (movimento) e una tappa in `STRADA`.
 - **Strada dei trofei**: si possono aggiungere tappe, mai spostare o togliere quelle che
   esistono: i ragazzi perderebbero premi già presi. Ogni premio deve esistere nel suo elenco
@@ -252,9 +298,9 @@ possa rieseguire senza perdere dati.
   dell'avatar non sono controllate dallo SQL: niente da rilanciare.
 - **Suoni**: elenco `LIB` dentro `SUONI`. Dopo una modifica ascolta i file del collaudo.
 - **Valori dei trofei**: costante `T` in `gioco.html` e `gioco_danni()` nello SQL, insieme.
-  `mieiDanni()` in `gioco.html` rifà gli stessi conti di `gioco_danni()` per un solo ragazzo
-  usando `T`: se cambia *cosa* toglie energia al boss, va cambiata anche lei (il collaudo
-  confronta i due numeri).
+  Anche le *regole* sono in due posti: `calcola()` nell'app (trofei e `mesi`, l'energia tolta
+  al boss) e `gioco_danni()` nello SQL. Il collaudo confronta i due conti per ogni ragazzo e
+  ogni mese, con casi difficili: se cambi una regola da una parte sola, fallisce.
 - **Server**: le righe `CONFIG` in cima a `gioco.html`, le stesse di `index.html`.
 
 ## Collaudo
@@ -264,8 +310,8 @@ Si lancia dalla cartella `test/`:
 ```
 cd test
 npm install
-npm test        # database: 72 controlli, deve finire senza righe FALLITO
-npm run e2e     # app su telefono simulato: 30 controlli, 50 schermate + l'immagine esportata in
+npm test        # database: 88 controlli, deve finire senza righe FALLITO
+npm run e2e     # app su telefono simulato: 40 controlli, 54 schermate + l'immagine esportata in
                 # test/shots/, nessuna riga FALLITO, "ERRORI: nessuno"
 npm run anteprima   # facoltativo: nove Fighter diversi in test/shots/anteprima-fighter.png
 ```
@@ -289,6 +335,13 @@ npm run anteprima   # facoltativo: nove Fighter diversi in test/shots/anteprima-
   premi che esistono, l'esultanza scelta in anteprima e sulla card, «Il gioco è cresciuto!»
   una volta sola, la festa del boss sconfitto con i 20 trofei, il messaggio «Stelle messe»
   senza nomi, mosse ed esultanze ferme con «riduci movimento».
+  Dalla versione 4 controlla anche: sfida della settimana (5 + 5 la prima volta), etichetta
+  «nuova», record oltre le prime tre sfide senza trofei, obiettivo di mercoledì e di venerdì,
+  app e database d'accordo su sfide, giro e mesi, energia del boss uguale per tutti i
+  ragazzi e tutti i mesi, «Sfide nuove!» una volta sola. Il collaudo del database prova in più:
+  giorno della settimana, giro delle dodici sfide, autovalutazione troppo presto o nello
+  stesso giorno, regole nuove e regole di prima, record a tempo, bonus fantasquadra e record
+  del combine nel boss, solo sei funzioni chiamabili, SQL rilanciato due volte senza perdere dati.
 - **Fotogrammi**: `30-fotogrammi-mosse.png` e `30-fotogrammi-esultanze.png` mostrano ogni
   movimento fermato in quattro momenti, a grandezza vera. Vanno guardati dopo ogni modifica a
   `MOSSA_ANIM`, `ES_ANIM` o al disegno del Fighter.
@@ -298,26 +351,21 @@ npm run anteprima   # facoltativo: nove Fighter diversi in test/shots/anteprima-
   collaudo dell'app non è fatto: va detto, non dato per buono.
 - L'immagine del riepilogo è lo stesso canvas che si vede a schermo.
 
-Ultimo collaudo: 15 novembre 2026 (versione 3), dalla cartella `test/` del repository. 72
-controlli sul database superati; app: 30 controlli superati, 50 schermate più l'immagine
+Ultimo collaudo: 16 novembre 2026 (versione 4), dalla cartella `test/` del repository. 88
+controlli sul database superati; app: 40 controlli superati, 54 schermate più l'immagine
 esportata, 16 suoni registrati, zero errori in console.
 
-## Difetti noti, non toccati nella versione 3
+## Difetti corretti nella versione 4
 
-Trovati nella valutazione del 15 novembre 2026. Servono modifiche allo SQL, quindi sono
-rimandati a una pull request a parte (da lanciare in Supabase prima di approvarla).
+Trovati nella valutazione del 15 novembre 2026, corretti il 16 novembre 2026.
 
-- **Autovalutazione subito**: il ragazzo può scegliere l'obiettivo e autovalutarsi lo stesso
-  giorno, anche il lunedì. Andrebbe aperta dal venerdì, nell'app e in `gioco_ragazzo()`.
-- **Record senza tetto**: il +5 del record vale anche oltre le tre sfide della settimana; chi
-  conosce il PIN può salire di un palleggio alla volta, fino a 30 azioni al giorno. La
-  conferma del genitore è l'unico freno. Le medaglie non hanno questo problema: contano i giorni.
-- **Il boss non conta tutti i trofei**: bonus dei record, bonus fantasquadra e bonus del
-  combine non gli tolgono energia (`gioco_danni()` non li somma), mentre nell'app c'è scritto
-  «ogni trofeo».
+- **Autovalutazione subito**: ora da venerdì a domenica, non nel giorno della scelta.
+- **Record senza tetto**: ora il +5 vale solo in una delle prime tre sfide della settimana.
+- **Il boss non contava tutti i trofei**: ora conta anche record e bonus fantasquadra.
 
-Rimandati con loro, perché toccano le chiavi in `gioco_ammessi()`: nuove sfide a casa, la
-«sfida della settimana» a rotazione e la missione di fantasquadra a somma.
+Ancora fuori, da decidere con Filippo: la missione di fantasquadra a somma («in tre fate 150
+tocchi»). Chi salta il fine settimana non può autovalutarsi per quella settimana: è voluto,
+ma se pesa si può allargare al lunedì successivo (servirebbe SQL).
 
 ## Lasciato fuori dalla versione 1 (di proposito)
 
