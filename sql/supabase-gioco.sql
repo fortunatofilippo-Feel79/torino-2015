@@ -1,5 +1,5 @@
 -- =====================================================================
--- Torino Club MP — gioco NEVER GIVE UP (novembre 2026)
+-- Torino Club MP — gioco NEVER GIVE UP (novembre 2026, versione 4)
 -- Supabase › SQL Editor › New query: incolla tutto e premi Run.
 -- Si può rieseguire senza danni: non cancella i dati già salvati.
 -- Nessuna password o codice va scritto qui dentro.
@@ -129,6 +129,25 @@ returns text language sql immutable set search_path = '' as $$
   select (array['impegno','coraggio','rispetto','squadra'])[(substr(p_settimana, 7)::integer % 4) + 1]
 $$;
 
+-- giorno della settimana a Roma: 1 lunedì … 7 domenica
+create or replace function public.gioco_giorno(p_ts timestamptz default now())
+returns integer language sql stable set search_path = '' as $$
+  select extract(isodow from p_ts at time zone 'Europe/Rome')::integer
+$$;
+
+-- sfida della settimana: a rotazione tra le dodici (stesso giro di SFIDA_GIRO in gioco.html)
+create or replace function public.gioco_sfida_settimana(p_settimana text)
+returns text language sql immutable set search_path = '' as $$
+  select (array['otto','palleggi','dentro_fuori','muro_d','bersaglio','slalom','stop','muro_f','spola','suola','pall_d','equilibrio'])
+         [(substr(p_settimana, 7)::integer % 12) + 1]
+$$;
+
+-- mese a cui appartiene una settimana: quello della sua domenica (serve al bonus fantasquadra)
+create or replace function public.gioco_mese_settimana(p_settimana text)
+returns text language sql stable set search_path = '' as $$
+  select to_char(to_date(p_settimana, 'IYYY-"W"IW') + 6, 'YYYY-MM')
+$$;
+
 -- 'dirigente' con la password dell'annata (app partite), 'mister' con il suo codice
 create or replace function public.gioco_ruolo(p_squadra text, p_chiave text)
 returns text language sql stable set search_path = '' as $$
@@ -160,31 +179,64 @@ returns jsonb language sql stable set search_path = '' as $$
   where s.id = p_squadra and coalesce(r->>'id', '') <> '' and coalesce(r->>'name', '') <> ''
 $$;
 
--- trofei del mese per ragazzo (danni al boss). Stessi valori dell'app.
+-- trofei del mese per ragazzo (danni al boss). Stessi valori e stesse regole dell'app
+-- (calcola() in gioco.html): ogni trofeo toglie energia, tranne il premio del boss stesso.
+-- Regole della versione 4, valide dalla settimana scritta in impostazioni.regole4
+-- (se manca, non valgono ancora): il bonus del record conta solo nelle prime tre sfide
+-- della settimana, e la sfida della settimana vale 5 trofei in più la prima volta.
 create or replace function public.gioco_danni(p_squadra text, p_mese text)
 returns table (giocatore uuid, trofei integer)
-language sql stable set search_path = '' as $$
-  with ev as (
-    select e.giocatore, e.tipo, e.dati, e.settimana,
+language plpgsql stable set search_path = '' as $$
+#variable_conflict use_column
+begin
+  return query
+  with reg as (
+    select coalesce((select s.impostazioni->>'regole4' from public.gioco_squadre s where s.id = p_squadra), '9999-W99') as da
+  ), ev as (
+    select e.id, e.creato, e.giocatore, e.tipo, e.dati, e.settimana, e.mese,
+           case when e.tipo in ('sfida', 'combine') then (e.dati->>'valore')::numeric end as v,
+           coalesce(e.dati->>'sfida', e.dati->>'prova', '') as k,
            row_number() over (partition by e.giocatore, e.settimana, e.tipo order by e.creato, e.id) as rn
     from public.gioco_eventi e
-    where e.squadra = p_squadra and e.mese = p_mese
+    where e.squadra = p_squadra
+  ), ev2 as (
+    select ev.*,
+           row_number() over (partition by ev.giocatore, ev.settimana, ev.tipo, ev.k order by ev.creato, ev.id) as rn_k,
+           max(ev.v) over prima as v_max, min(ev.v) over prima as v_min
+    from ev
+    window prima as (partition by ev.giocatore, ev.tipo, ev.k order by ev.creato, ev.id
+                     rows between unbounded preceding and 1 preceding)
+  ), ev3 as (
+    -- record: meglio di tutti i risultati precedenti (per slalom, spola e le prove a tempo «meglio» è meno)
+    select ev2.*,
+           case when ev2.tipo = 'sfida' and ev2.k = any (public.gioco_ammessi('sfide_meno')) then ev2.v < ev2.v_min
+                when ev2.tipo = 'combine' and ev2.k = any (public.gioco_ammessi('prove_meno')) then ev2.v < ev2.v_min
+                when ev2.tipo in ('sfida', 'combine') then ev2.v > ev2.v_max
+                else false end as record
+    from ev2
   ), punti as (
-    select ev.giocatore,
-           case ev.tipo
-             when 'stella' then 10 + case when ev.dati->>'area' = public.gioco_area_missione(ev.settimana) then 5 else 0 end
+    select ev3.giocatore, ev3.mese,
+           case ev3.tipo
+             when 'stella' then 10 + case when ev3.dati->>'area' = public.gioco_area_missione(ev3.settimana) then 5 else 0 end
              when 'mossa' then 30
-             when 'sfida' then case when ev.rn <= 3 then 5 else 0 end
+             when 'sfida' then case when ev3.rn <= 3 then 5 else 0 end
+                             + case when coalesce(ev3.record, false) and (ev3.rn <= 3 or ev3.settimana < reg.da) then 5 else 0 end
+                             + case when ev3.settimana >= reg.da and ev3.rn_k = 1
+                                         and ev3.k = public.gioco_sfida_settimana(ev3.settimana) then 5 else 0 end
              when 'autovalutazione' then 5
              when 'gg' then 2
-             when 'combine' then 5
+             when 'combine' then 5 + case when coalesce(ev3.record, false) then 10 else 0 end
              when 'greencard' then 50
              else 0 end as p
-    from ev
+    from ev3 cross join reg
     union all
-    select (ev.dati->>'a')::uuid, 3 from ev where ev.tipo = 'gg'
+    select (ev.dati->>'a')::uuid, ev.mese, 3 from ev where ev.tipo = 'gg'          -- GG ricevuto
+    union all
+    select t.giocatore, public.gioco_mese_settimana(t.settimana), 10                -- bonus fantasquadra
+    from public.gioco_trii_stato(p_squadra) t where t.bonus
   )
-  select punti.giocatore, sum(punti.p)::integer from punti group by punti.giocatore
+  select punti.giocatore, sum(punti.p)::integer from punti where punti.mese = p_mese group by punti.giocatore;
+end;
 $$;
 
 -- crea i trii della settimana al primo accesso; chi entra dopo va nel gruppo più piccolo
@@ -358,7 +410,8 @@ revoke all on function public.gioco_settimana(timestamptz), public.gioco_mese(ti
   public.gioco_testo_ok(text, integer, integer), public.gioco_rosa(text),
   public.gioco_danni(text, text), public.gioco_assicura_trii(text), public.gioco_trii_stato(text),
   public.gioco_boss_stato(text, text), public.gioco_bacheca(text), public.gioco_compagni(text),
-  public.gioco_boss_vinti(uuid)
+  public.gioco_boss_vinti(uuid), public.gioco_giorno(timestamptz), public.gioco_sfida_settimana(text),
+  public.gioco_mese_settimana(text)
   from public, anon, authenticated;
 
 
@@ -371,10 +424,13 @@ returns text[] language sql immutable set search_path = '' as $$
   select case p_cosa
     when 'aree'     then array['impegno','coraggio','rispetto','squadra']
     when 'mosse'    then array['finta','doppio','cruyff','suola','marsiglia','stop','esterno','collo','debole','v','uscita','rimessa']
-    when 'sfide'    then array['palleggi','muro_f','muro_d','slalom','suola','equilibrio']
+    when 'sfide'    then array['palleggi','muro_f','muro_d','slalom','suola','equilibrio',
+                               'otto','pall_d','dentro_fuori','bersaglio','spola','stop']
+    when 'sfide_meno' then array['slalom','spola']               -- sfide a tempo: meno è meglio
     when 'obiettivi' then array['debole','chiedi','rientra','incoraggia','unoveuno','borsa','ascolta','mossa']
     when 'esiti'    then array['fatto','quasi','non_ancora']
     when 'prove'    then array['sprint','navetta','slalom','palleggi']
+    when 'prove_meno' then array['sprint','navetta','slalom']    -- prove a tempo: meno è meglio
     else array[]::text[] end
 $$;
 revoke all on function public.gioco_ammessi(text) from public, anon, authenticated;
@@ -475,7 +531,7 @@ begin
                              'pin_bloccato', g.pin_errori >= 8),
     'squadra', (select jsonb_build_object('id', s.id, 'impostazioni', s.impostazioni - 'figlio')
                 from public.gioco_squadre s where s.id = g.squadra),
-    'ora', jsonb_build_object('settimana', w, 'mese', m, 'adesso', now()),
+    'ora', jsonb_build_object('settimana', w, 'mese', m, 'adesso', now(), 'giorno', public.gioco_giorno()),
     'eventi', (select coalesce(jsonb_agg(jsonb_build_object('id', e.id, 'tipo', e.tipo, 'dati', e.dati,
                                  'autore', e.autore, 'settimana', e.settimana, 'mese', e.mese, 'creato', e.creato)
                                  order by e.creato, e.id), '[]'::jsonb)
@@ -581,6 +637,14 @@ begin
     if exists (select 1 from public.gioco_eventi e where e.giocatore = g.id and e.settimana = w and e.tipo = 'autovalutazione') then
       return jsonb_build_object('errore', 'gia_valutato');
     end if;
+    -- si dice com'è andata a fine settimana (da venerdì a domenica) ...
+    if public.gioco_giorno() < 5 then return jsonb_build_object('errore', 'presto'); end if;
+    -- ... e non nello stesso giorno in cui si è scelto l'obiettivo: prima ci si prova
+    if not exists (select 1 from public.gioco_eventi e
+                   where e.giocatore = g.id and e.settimana = w and e.tipo = 'obiettivo'
+                     and (e.creato at time zone 'Europe/Rome')::date < (now() at time zone 'Europe/Rome')::date) then
+      return jsonb_build_object('errore', 'oggi');
+    end if;
     insert into public.gioco_eventi (squadra, giocatore, tipo, dati, autore, settimana, mese)
     values (g.squadra, g.id, 'autovalutazione', jsonb_build_object('esito', k), 'ragazzo', w, m)
     returning id into nid;
@@ -682,8 +746,9 @@ begin
     if not exists (select 1 from public.stato x where x.id = p_squadra) then
       return jsonb_build_object('errore', 'annata');
     end if;
-    insert into public.gioco_squadre (id, codice_invito, codice_mister)
-    values (p_squadra, public.gioco_codice(6), public.gioco_codice(10))
+    insert into public.gioco_squadre (id, codice_invito, codice_mister, impostazioni)
+    values (p_squadra, public.gioco_codice(6), public.gioco_codice(10),
+            jsonb_build_object('regole4', public.gioco_settimana()))
     on conflict (id) do nothing;
     return jsonb_build_object('ok', true);
   end if;
@@ -836,6 +901,13 @@ grant execute on function public.gioco_pubblico(text, text), public.gioco_iscriv
   public.gioco_io(text), public.gioco_ragazzo(text, text, jsonb), public.gioco_staff(text, text),
   public.gioco_staff_azione(text, text, text, jsonb)
   to anon, authenticated;
+
+-- Passaggio alla versione 4. Le regole nuove sui trofei (record solo nelle prime tre sfide
+-- della settimana, sfida della settimana) valgono dal lunedì dopo il primo lancio di questo
+-- file: i trofei già presi non cambiano. Rilanciare il file non sposta la data.
+update public.gioco_squadre
+   set impostazioni = impostazioni || jsonb_build_object('regole4', public.gioco_settimana(now() + interval '7 days'))
+ where not (impostazioni ? 'regole4');
 
 notify pgrst, 'reload schema';
 
