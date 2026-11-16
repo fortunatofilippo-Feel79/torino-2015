@@ -29,8 +29,14 @@ Niente nomi, niente punteggi dei singoli.
 2. Tocca un ragazzo e scegli la frase giusta: impegno, coraggio, rispetto o squadra.
    Il ragazzo la legge così com'è. Una stella per area a settimana.
 3. Ti sei sbagliato? **Annulla** nell'avviso in basso, oppure riapri il ragazzo.
-4. **Mosse**: quando un ragazzo fa vedere bene una mossa, la sblocchi lì.
+4. **Mosse**: quando un ragazzo fa vedere bene una mossa, la sblocchi lì. Da quel momento
+   la fa anche il suo Fighter: alla prossima apertura la vede a schermo intero. È il premio che
+   i ragazzi aspettano di più.
 5. **Green Card**: dentro la scheda del ragazzo, per un gesto di fair play speciale.
+6. **Hai finito?** In fondo alla scheda Stelle c'è **Messaggio «Stelle messe»**: un testo pronto
+   per il gruppo dei genitori, senza nomi né punteggi. Il gioco non manda avvisi ai ragazzi:
+   questo messaggio è il modo per far sapere che ci sono novità da aprire. Lo vede anche il
+   dirigente.
 
 ## Il combine (ogni 6–8 settimane, 20 minuti)
 
@@ -48,6 +54,24 @@ Il Fighter si muove e salta se lo toccano; sfide e mosse hanno un disegno che mo
 fanno. Quando arrivano stelle, premi o un nuovo grado, all'apertura compare **Ci sono
 novità!**: toccando **Vediamo!** parte la festa. Un record nelle sfide a casa ha la sua
 schermata. I trofei nuovi volano sulla coppa in alto e il boss trema quando la squadra lo colpisce.
+
+**Dalla versione 3** (15 novembre 2026):
+
+- **Il Fighter fa le mosse sbloccate**: nei Trofei, toccando una mossa sbloccata, compare un
+  campetto e il Fighter la fa con la palla. Le mosse ancora chiuse mostrano solo il disegno.
+- **Medaglie delle sfide a casa**: bronzo, argento e oro per ogni sfida, quando l'hanno fatta
+  in 2, 5 e 10 giorni diversi. Conta la costanza, non il risultato; non servono giorni di fila
+  e una medaglia presa non si perde. Nel foglio della sfida c'è anche il grafico dei propri
+  risultati. Non danno trofei.
+- **Prossimi traguardi**: nella pagina Fighter, poche righe che dicono cosa si può fare adesso
+  (quanti trofei mancano al prossimo premio, sfide rimaste, GG da mandare, boss da colpire).
+- **Più premi**: sulla strada dei trofei ce n'è uno ogni 125 trofei al massimo. Tra i nuovi ci
+  sono le **esultanze**: il Fighter esulta nel modo scelto quando lo toccano e nelle feste.
+- **Boss**: cambia faccia a metà e a un quarto dell'energia, e ognuno vede quanta energia gli
+  ha tolto lui (solo la sua, nessun confronto). Quando è sconfitto, alla prima apertura c'è la
+  festa con il premio di squadra scritto dal dirigente.
+- Chi giocava già trova una volta **Il gioco è cresciuto!**, con i premi nuovi che ha già
+  guadagnato.
 
 **Suoni**: ci sono solo nell'app dei ragazzi, non in quella del mister e del dirigente. Il
 ragazzo li spegne con l'altoparlante in alto; su iPhone tacciono anche con il tasto

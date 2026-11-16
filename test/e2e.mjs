@@ -108,19 +108,34 @@ await db.exec(`
   insert into public.gioco_eventi (squadra, giocatore, tipo, dati, autore, settimana, mese, creato)
   select '2015', '${idLucky}', 'mossa', jsonb_build_object('mossa', m), 'mister', public.gioco_settimana(now() - interval '3 weeks'), public.gioco_mese(now() - interval '3 weeks'), now() - interval '3 weeks'
   from unnest(array['finta','stop','suola']) m;
+  insert into public.gioco_eventi (squadra, giocatore, tipo, dati, autore, settimana, mese, creato)
+  values ('2015', '${idLucky}', 'sfida', jsonb_build_object('sfida','muro_d','valore', 20), 'genitore',
+          public.gioco_settimana(now() - interval '9 days'), public.gioco_mese(now() - interval '9 days'), now() - interval '9 days');
 `);
 // compagni con qualche evento: sfide e stelle (per trio e boss)
 for (const s of ['Bomber','Tommi','Ale','Dado']) await db.query(`select public.gioco_ragazzo($1,'sfida',$2)`, [tok[s], JSON.stringify({ sfida:'muro_f', valore:'15', pin:'1234' })]);
 // 5. il ragazzo riapre: novità
 await K.page.reload(); await K.page.waitForSelector('.festa');
 await spia(K.page);
-{ const n = await feste(K.page, '13-ragazzo-novita-');
-  console.log(n === 3 ? 'ok - all\'apertura: Vediamo, nuovo grado, sbloccato' : 'FALLITO feste all\'apertura: ' + n);
+{ let mossaOk = false, n = 0;
+  while (await K.page.$('.festa .btn')) {
+    await shot(K.page, `13-ragazzo-novita-${String.fromCharCode(97 + n)}`);
+    if (await K.page.$('.festa .campetto')) {   // la festa della mossa nuova: il Fighter la fa da solo
+      await K.page.waitForTimeout(1100);
+      mossaOk = await K.page.evaluate(() => ['.att', '.pal'].every(q => document.querySelector('.festa .campetto ' + q).getAnimations().some(a => a.id === 'ngu')));
+      await shot(K.page, '13-ragazzo-novita-mossa-in-corso');
+    }
+    n++; await K.page.click('.festa .btn'); await K.page.waitForTimeout(350);
+  }
+  console.log(n === 4 ? 'ok - all\'apertura: Vediamo, nuovo grado, mossa nuova, sbloccato' : 'FALLITO feste all\'apertura: ' + n);
+  console.log(mossaOk ? 'ok - nella festa il Fighter fa la mossa appena sbloccata' : 'FALLITO la mossa nuova non parte nella festa');
   await K.page.waitForTimeout(2600);
   const r = await K.page.evaluate(() => ({ num: document.getElementById('numT').textContent, veri: S.c.trofei, suoni: window.__suoni, osc: window.__osc }));
   console.log(r.num === String(r.veri) ? 'ok - il contatore arriva ai trofei veri (' + r.num + ')' : 'FALLITO contatore ' + r.num + ' invece di ' + r.veri);
   console.log(r.suoni.includes('grado') && r.suoni.includes('fanfara') && r.suoni.includes('moneta') && r.osc > 20 ? 'ok - suoni di grado, sblocco e monete partiti davvero (' + r.osc + ' oscillatori)' : 'FALLITO suoni all\'apertura ' + JSON.stringify(r)); }
 await full(K.page, '14-ragazzo-fighter');
+{ const t = await K.page.evaluate(() => [...document.querySelectorAll('.trag')].map(b => b.textContent.replace(/\s+/g, ' ').trim()));
+  console.log(t.length >= 2 && t.length <= 4 && /Mancano \d+ trofei/.test(t[0]) ? 'ok - prossimi traguardi: ' + t.join(' | ') : 'FALLITO traguardi: ' + JSON.stringify(t)); }
 await K.page.click('[data-act=salta]'); await K.page.waitForTimeout(220);
 await shot(K.page, '14b-fighter-salta');
 await K.page.click('[data-act=missione]'); await K.page.waitForSelector('.foglio h2');
@@ -139,8 +154,19 @@ await K.page.fill('#valSfida', '12'); await K.page.fill('#pinSfida', '9999');
 await K.page.click('[data-act=salvaSfida]'); await K.page.waitForSelector('.foglio .errore');
 await shot(K.page, '17-sfida-pin-errato');
 await K.page.fill('#pinSfida', '1234'); await K.page.click('[data-act=salvaSfida]');
-await K.page.waitForTimeout(500);
+await K.page.waitForSelector('.festa .medagliona', { timeout: 5000 }).then(() => console.log('ok - secondo giorno della stessa sfida: festa della medaglia di bronzo')).catch(() => console.log('FALLITO festa della medaglia'));
+await K.page.waitForTimeout(700);
+await shot(K.page, '17b-medaglia');
+await feste(K.page);
+await K.page.waitForTimeout(2400);
+{ const r = await K.page.evaluate(() => ({ tessere: document.querySelectorAll('.tessera .med').length, muro: S.c.medaglie.muro_d, palleggi: S.c.medaglie.palleggi, giorni: S.c.giorni.palleggi }));
+  console.log(r.tessere === 6 && r.muro === 1 && r.palleggi === 2 && r.giorni === 6 ? 'ok - medaglie sulle tessere: muro debole bronzo, palleggi argento (6 giorni)' : 'FALLITO medaglie ' + JSON.stringify(r)); }
 await K.page.click('[data-act=sfida][data-k=palleggi]');
+await K.page.waitForSelector('.foglio .grafico polyline');
+{ const r = await K.page.evaluate(() => ({ prese: document.querySelectorAll('.foglio .medaglie .presa').length, punti: document.querySelectorAll('.foglio .grafico circle').length }));
+  console.log(r.prese === 2 && r.punti === 6 ? 'ok - nel foglio della sfida: due medaglie prese e grafico con i 6 risultati' : 'FALLITO foglio sfida ' + JSON.stringify(r));
+  await K.page.evaluate(() => { const f = document.querySelector('.foglio'); f.scrollTop = f.scrollHeight; }); await shot(K.page, '17c-sfida-medaglie-grafico');
+  await K.page.evaluate(() => { document.querySelector('.foglio').scrollTop = 0; }); }
 await K.page.fill('#valSfida', '41'); await K.page.fill('#pinSfida', '1234'); await K.page.click('[data-act=salvaSfida]');
 await K.page.waitForSelector('.festa .gigante'); await K.page.waitForTimeout(700);
 await shot(K.page, '18-record');
@@ -156,6 +182,10 @@ await full(K.page, '19-ragazzo-sfide-dopo');
 await K.page.click('[data-act=tab][data-k=squadra]');
 await K.page.waitForTimeout(200);
 await full(K.page, '20-ragazzo-squadra');
+{ const mese = (await db.query(`select public.gioco_mese() m`)).rows[0].m;
+  const sql = (await db.query(`select trofei from public.gioco_danni('2015', $1) where giocatore = $2`, [mese, idLucky])).rows[0];
+  const r = await K.page.evaluate(() => ({ miei: mieiDanni(S.io), fase: (document.querySelector('.boss .fase') || {}).textContent, tuo: (document.querySelector('.boss .tuo') || {}).textContent, tacche: document.querySelectorAll('.energia b').length }));
+  console.log(sql && r.miei === sql.trofei && r.tuo.includes(String(r.miei)) && r.fase && r.tacche === 3 ? `ok - boss: fase «${r.fase}», il tuo contributo (${r.miei}) è uguale al conto del database` : 'FALLITO boss ' + JSON.stringify(r) + ' sql ' + JSON.stringify(sql)); }
 const g = await K.page.$('[data-act=gg]');
 if (g) { await g.click(); await K.page.waitForSelector('[data-act=mandaGG]'); await shot(K.page, '21-gg'); await K.page.click('[data-act=mandaGG][data-f="1"]');
   await K.page.waitForSelector('.danno', { timeout: 5000 }).then(() => console.log('ok - il GG toglie energia al boss: numero del danno e boss che trema')).catch(() => console.log('FALLITO boss colpito dopo il GG'));
@@ -165,7 +195,18 @@ if (g) { await g.click(); await K.page.waitForSelector('[data-act=mandaGG]'); aw
 await K.page.click('[data-act=tab][data-k=strada]');
 await full(K.page, '22-ragazzo-trofei');
 await K.page.click('[data-act=mossa][data-k=doppio]'); await K.page.waitForSelector('.foglio .disegno animateMotion', { state: 'attached' });
+await K.page.waitForTimeout(900);
+{ const r = await K.page.evaluate(() => ({ campo: !!document.querySelector('#foglio .campetto'), gira: ['.att', '.pal', '.att .ga-d'].every(q => document.querySelector('#foglio .campetto ' + q).getAnimations().some(a => a.id === 'ngu')) }));
+  console.log(r.campo && r.gira ? 'ok - mossa sbloccata: il Fighter la fa nel campetto (Fighter, palla e gamba si muovono)' : 'FALLITO campetto della mossa ' + JSON.stringify(r)); }
 await shot(K.page, '22b-mossa-disegno'); await K.page.click('[data-act=chiudi]');
+await K.page.click('[data-act=mossa][data-k=cruyff]'); await K.page.waitForSelector('.foglio .disegno');
+console.log(!(await K.page.$('#foglio .campetto')) ? 'ok - mossa non sbloccata: solo il disegno, niente campetto' : 'FALLITO campetto su mossa chiusa');
+await shot(K.page, '22d-mossa-chiusa'); await K.page.click('[data-act=chiudi]');
+{ const r = await K.page.evaluate(() => ({ mosse: MOSSE.filter(m => !MOSSA_ANIM[m.k]).map(m => m.k), es: Object.keys(ESULTANZE).filter(k => k !== 'salto' && !ES_ANIM[k]),
+    strada: STRADA.every((tp, i) => !i || tp.t > STRADA[i - 1].t), buco: Math.max(...STRADA.map((tp, i) => i ? tp.t - STRADA[i - 1].t : 0)),
+    premi: STRADA.flatMap(tp => tp.premi).filter(([t, k]) => !({ maglia: KIT, scarpe: SCARPE, sfondo: SFONDI, cornice: CORNICI, acc: ACCESSORI, esultanza: ESULTANZE }[t] || { [k]: 1 })[k]) }));
+  console.log(!r.mosse.length && !r.es.length ? 'ok - ogni mossa e ogni esultanza ha il suo movimento' : 'FALLITO movimenti mancanti: ' + JSON.stringify(r));
+  console.log(r.strada && r.buco <= 125 && !r.premi.length ? `ok - strada dei trofei in ordine, al massimo ${r.buco} trofei tra un premio e l'altro, tutti i premi esistono` : 'FALLITO strada ' + JSON.stringify(r)); }
 { const r = await K.page.evaluate(() => ({ sfide: SFIDE.filter(s => !DIS_SFIDA[s.k]).map(s => s.k), mosse: MOSSE.filter(m => !DIS_MOSSA[m.k]).map(m => m.k) }));
   console.log(!r.sfide.length && !r.mosse.length ? 'ok - ogni sfida e ogni mossa ha il suo disegno' : 'FALLITO disegni mancanti: ' + JSON.stringify(r)); }
 // suoni spenti: l'altoparlante in alto li ferma davvero
@@ -186,10 +227,60 @@ await K.page.click('.foglio [data-act=av][data-t=maglia][data-k=trasferta]').cat
 await K.page.click('.foglio [data-act=av][data-t=sfondo][data-k=stadio]').catch(() => console.log('stadio bloccato'));
 await K.page.click('.foglio [data-act=av][data-t=cornice][data-k=bronzo]').catch(() => console.log('bronzo bloccato'));
 await K.page.click('.foglio [data-act=av][data-t=scarpe][data-k=rosse]').catch(() => console.log('rosse bloccate'));
+await K.page.click('.foglio [data-act=av][data-t=esultanza][data-k=braccia]').catch(() => console.log('FALLITO esultanza braccia bloccata'));
+await K.page.waitForTimeout(450);
+{ const r = await K.page.evaluate(() => ({ su: document.querySelector('#anteprima .br-s').getAnimations().some(a => a.id === 'ngu'), chiuse: document.querySelectorAll('.foglio [disabled]').length }));
+  console.log(r.su && r.chiuse > 0 ? 'ok - esultanza scelta: l\'anteprima alza le braccia; le esultanze non ancora guadagnate restano chiuse' : 'FALLITO esultanza in anteprima ' + JSON.stringify(r)); }
 await shot(K.page, '23-personalizza');
 await K.page.evaluate(() => { document.querySelector('.foglio').scrollTop = 0; }); await shot(K.page, '23b-personalizza-in-alto');
 await K.page.click('[data-act=salvaAvatar]'); await K.page.waitForTimeout(500);
 await shot(K.page, '24-fighter-nuovo');
+await K.page.click('.eroe [data-act=salta]'); await K.page.waitForTimeout(500);
+console.log((await K.page.evaluate(() => document.querySelector('.eroe .figura').dataset.es === 'braccia' && document.querySelector('.eroe .br-d').getAnimations().some(a => a.id === 'ngu'))) ? 'ok - toccato, il Fighter esulta con l\'esultanza salvata' : 'FALLITO esultanza sulla card');
+await shot(K.page, '24b-esultanza');
+// fotogrammi di tutte le mosse e di tutte le esultanze, a grandezza vera su uno schermo largo: vanno guardati
+{ const F = await contesto({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+  await F.page.goto(BASE + `gioco.html?s=2015&t=${new URL(K.page.url()).searchParams.get('t')}`); await F.page.waitForSelector('.eroe'); await feste(F.page);
+  const fot = async (nome, tempi) => {
+    await F.page.evaluate(([tempi, mosse]) => {
+      document.getAnimations().forEach(a => a.cancel());
+      const quali = mosse ? MOSSE.map(m => m.k) : Object.keys(ES_ANIM);
+      const celle = quali.map(k => `<div style="font:800 15px Nunito,sans-serif;color:#fff;align-self:center">${mosse ? MOSSA[k].nome : ESULTANZE[k].nome}</div>` + tempi.map(t => mosse
+        ? `<div data-t="${t}" class="fot" style="width:330px">${campetto(k)}</div>` : `<div data-t="${t}" class="fot eroe sf-campo" style="width:330px;margin:0"><div class="figura" data-es="${k}">${fighterSVG(S.io.io.avatar, { numero: 10 })}</div></div>`).join('')).join('');
+      const app = document.getElementById('app'); app.style.maxWidth = 'none';
+      app.innerHTML = `<div style="display:grid;grid-template-columns:90px repeat(${tempi.length},330px);gap:8px">${celle}</div>`;
+      document.querySelectorAll('.fot').forEach(c => {
+        const prima = new Set(document.getAnimations());
+        if (mosse) faiMossa(c.querySelector('.campetto')); else esulta(c.querySelector('.figura'));
+        document.getAnimations().filter(a => !prima.has(a) && a.id === 'ngu').forEach(a => { a.pause(); a.currentTime = +c.dataset.t * a.effect.getTiming().duration; });
+      });
+    }, [tempi, nome === 'mosse']);
+    await full(F.page, `30-fotogrammi-${nome}`);
+  };
+  await fot('mosse', [.25, .45, .7, .95]);
+  await fot('esultanze', [.15, .35, .5, .7]);
+  await F.ctx.close(); }
+// chi giocava già prima della versione 3 trova una volta sola «Il gioco è cresciuto!» con i premi già guadagnati
+{ const attesi = await K.page.evaluate(() => STRADA.filter(tp => tp.n === 3 && tp.t <= S.c.trofei).flatMap(tp => tp.premi).length);
+  await K.page.evaluate(id => localStorage.removeItem('ngu:v3:' + id), idLucky);
+  await K.page.reload(); await K.page.waitForSelector('.festa');
+  let visto = null, n = 0;
+  while (await K.page.$('.festa .btn')) { const t = await K.page.evaluate(() => document.querySelector('.festa .scatola').textContent);
+    if (t.includes('Il gioco è cresciuto')) { visto = await K.page.evaluate(() => document.querySelectorAll('.festa .premio').length); await shot(K.page, '31-gioco-cresciuto'); }
+    n++; await K.page.click('.festa .btn'); await K.page.waitForTimeout(350); }
+  await K.page.reload(); await K.page.waitForSelector('.eroe'); await K.page.waitForTimeout(400);
+  console.log(visto === attesi && attesi >= 2 && !(await K.page.$('.festa .btn')) ? `ok - «Il gioco è cresciuto!» compare una volta sola, con i ${attesi} premi nuovi già guadagnati` : 'FALLITO gioco cresciuto: premi ' + visto + ' attesi ' + attesi + ', feste ' + n); }
+// boss battuto: schermata intera alla prossima apertura
+{ await db.query(`update public.gioco_squadre set impostazioni = jsonb_set(impostazioni, '{hp}', '1')`);   // energia al minimo (300)
+  await db.query(`insert into public.gioco_eventi (squadra, giocatore, tipo, dati, autore, settimana, mese)
+                  select '2015', id, 'greencard', '{}'::jsonb, 'mister', public.gioco_settimana(), public.gioco_mese() from public.gioco_giocatori where soprannome in ('Bomber','Dado','Ale','Nico','Edo','Tommi')`);
+  const prima = await K.page.evaluate(() => S.c.trofei);
+  await K.page.reload(); await K.page.waitForSelector('.festa');
+  let visto = false;
+  while (await K.page.$('.festa .btn')) { if (await K.page.$('.festa .boss-festa')) { visto = true; await K.page.waitForTimeout(600); await shot(K.page, '32-boss-sconfitto'); } await K.page.click('.festa .btn'); await K.page.waitForTimeout(350); }
+  const dopo = await K.page.evaluate(() => S.c.trofei);
+  console.log(visto && dopo === prima + 20 ? 'ok - boss battuto: festa «Sconfitto!» all\'apertura e 20 trofei in più' : 'FALLITO festa del boss battuto: vista ' + visto + ', trofei ' + prima + ' → ' + dopo);
+  await K.page.click('[data-act=tab][data-k=squadra]'); await K.page.waitForTimeout(300); await shot(K.page, '32b-squadra-boss-battuto'); }
 // 6. dirigente: riepilogo e immagine
 await D.page.reload(); await D.page.waitForSelector('[data-act=stab]');
 await D.page.click('[data-act=stab][data-k=squadra]');
@@ -215,12 +306,20 @@ console.log(inv.includes('gioco.html?s=2015&i=') ? 'ok - messaggio genitori con 
 await D.page.click('[data-act=invitoMister]'); await D.page.waitForTimeout(200);
 const mis = await D.page.evaluate(() => window.__copiato);
 console.log(mis.includes('&m=') ? 'ok - messaggio mister con link' : 'FALLITO messaggio mister');
+await D.page.click('[data-act=stab][data-k=stelle]'); await D.page.waitForSelector('[data-act=avvisaStelle]');
+await D.page.evaluate(() => document.querySelector('[data-act=avvisaStelle]').scrollIntoView({ block: 'center' })); await shot(D.page, '28b-stelle-messe');
+await D.page.click('[data-act=avvisaStelle]'); await D.page.waitForTimeout(200);
+{ const t = await D.page.evaluate(() => window.__copiato);
+  const nomi = (await db.query(`select nome, soprannome from public.gioco_giocatori`)).rows.flatMap(r => [r.nome, r.soprannome]);
+  console.log(t.includes('stelle di questa settimana') && !nomi.some(n => t.includes(n)) ? 'ok - messaggio «Stelle messe»: nessun nome di ragazzo' : 'FALLITO messaggio stelle: ' + t.slice(0, 120)); }
 // 7. chi ha "riduci movimento" sul telefono: niente animazioni
 { const R = await contesto({ reducedMotion: 'reduce' });
   await R.page.goto(BASE + `gioco.html?s=2015&t=${tok.Bomber}`); await R.page.waitForSelector('.eroe .corpo');
   await feste(R.page);
   const a = await R.page.evaluate(() => [getComputedStyle(document.querySelector('.eroe .corpo')).animationName, getComputedStyle(document.querySelector('.app > .pan')).animationName]);
-  console.log(a.every(x => x === 'none') ? 'ok - con "riduci movimento" il Fighter e le schede stanno fermi' : 'FALLITO riduci movimento: ' + a); }
+  console.log(a.every(x => x === 'none') ? 'ok - con "riduci movimento" il Fighter e le schede stanno fermi' : 'FALLITO riduci movimento: ' + a);
+  const m = await R.page.evaluate(() => { const f = document.querySelector('.eroe .figura'); f.dataset.es = 'capriola'; esulta(f); return muovi(f.querySelector('svg'), ES_ANIM.braccia) + document.getAnimations().filter(x => x.id === 'ngu').length; });
+  console.log(m === 0 ? 'ok - con "riduci movimento" mosse ed esultanze non partono' : 'FALLITO riduci movimento sulle esultanze: ' + m); }
 // 8. i suoni, registrati in file .wav da ascoltare (test/shots/suoni/)
 { const S2 = await contesto();
   await S2.page.goto(BASE + 'gioco.html'); await S2.page.waitForSelector('#codiceInvito');
