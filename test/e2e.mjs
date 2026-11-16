@@ -230,11 +230,50 @@ await full(K.page, '20-ragazzo-squadra');
   const sql = (await db.query(`select trofei from public.gioco_danni('2015', $1) where giocatore = $2`, [mese, idLucky])).rows[0];
   const r = await K.page.evaluate(() => ({ miei: mieiDanni(S.io), fase: (document.querySelector('.boss .fase') || {}).textContent, tuo: (document.querySelector('.boss .tuo') || {}).textContent, tacche: document.querySelectorAll('.energia b').length }));
   console.log(sql && r.miei === sql.trofei && r.tuo.includes(String(r.miei)) && r.fase && r.tacche === 3 ? `ok - boss: fase «${r.fase}», il tuo contributo (${r.miei}) è uguale al conto del database` : 'FALLITO boss ' + JSON.stringify(r) + ' sql ' + JSON.stringify(sql)); }
+// missione di fantasquadra: barra dei passi, chi ha dato una mano, nessun numero a testa
+const gruppo = (await db.query(`select t2.giocatore id, x.soprannome s from public.gioco_trii t1
+  join public.gioco_trii t2 on t2.squadra = t1.squadra and t2.settimana = t1.settimana and t2.gruppo = t1.gruppo
+  join public.gioco_giocatori x on x.id = t2.giocatore where t1.giocatore = $1 and t1.settimana = public.gioco_settimana()`, [idLucky])).rows;
+const passiVeri = async () => { let n = 0; for (const r of (await db.query(`select tipo, giocatore, count(*) c from public.gioco_eventi
+  where settimana = public.gioco_settimana() and tipo in ('sfida', 'stella', 'gg') and giocatore = any($1::uuid[]) group by 1, 2`, [gruppo.map(x => x.id)])).rows) n += r.tipo === 'sfida' ? Math.min(3, Number(r.c)) : Number(r.c); return n; };
+const passiPrima = await passiVeri();
+{ const r = await K.page.evaluate(() => ({ barra: document.querySelector('.fanta .passi span').textContent, M: S.io.missione, numeri: S.io.trio.some(t => 'passi' in t || 'totale' in t),
+    righe: [...document.querySelectorAll('.fanta .voce:not(.tifo) div.piccolo')].map(x => x.textContent.trim()) }));
+  console.log(gruppo.length >= 2 && r.M.passi === passiPrima && r.M.traguardo === 4 * gruppo.length && r.barra === `${passiPrima} passi su ${4 * gruppo.length}` && !r.numeri && r.righe.length === gruppo.length && r.righe.every(t => /dato una mano|non ancora|primo passo/.test(t))
+    ? `ok - missione di fantasquadra: ${r.barra}, per ogni compagno solo «ha dato una mano» o «non ancora» (${r.righe.join(' · ')})` : 'FALLITO missione ' + JSON.stringify(r) + ' veri ' + passiPrima + ' gruppo ' + gruppo.length); }
 const g = await K.page.$('[data-act=gg]');
 if (g) { await g.click(); await K.page.waitForSelector('[data-act=mandaGG]'); await shot(K.page, '21-gg'); await K.page.click('[data-act=mandaGG][data-f="1"]');
   await K.page.waitForSelector('.danno', { timeout: 5000 }).then(() => console.log('ok - il GG toglie energia al boss: numero del danno e boss che trema')).catch(() => console.log('FALLITO boss colpito dopo il GG'));
   await K.page.evaluate(() => document.querySelector('.boss').scrollIntoView({ block: 'center' })); await K.page.waitForTimeout(150);
-  await shot(K.page, '21b-boss-colpito'); await K.page.waitForTimeout(2600); }
+  await shot(K.page, '21b-boss-colpito'); await K.page.waitForTimeout(2600);
+  const p = await K.page.evaluate(() => S.io.missione.passi);
+  console.log(p === passiPrima + 1 && p === await passiVeri() ? 'ok - il GG mandato è un passo della fantasquadra' : 'FALLITO passo del GG: ' + passiPrima + ' → ' + p); }
+// tifo: una frase pronta a tutta la fantasquadra, non è un passo
+{ const prima = await K.page.evaluate(() => S.io.missione.passi);
+  await K.page.click('[data-act=tifo]'); await K.page.waitForSelector('[data-act=mandaTifo]'); await shot(K.page, '21c-tifo-frasi');
+  const frasi = await K.page.evaluate(() => ({ n: document.querySelectorAll('[data-act=mandaTifo]').length, campi: document.querySelectorAll('.foglio input, .foglio textarea').length }));
+  await K.page.click('[data-act=mandaTifo][data-f="0"]'); await K.page.waitForSelector('.voce.tifo');
+  const r = await K.page.evaluate(() => ({ t: document.querySelector('.voce.tifo').textContent, passi: S.io.missione.passi }));
+  console.log(frasi.n === 6 && frasi.campi === 0 && r.t.includes('Tu') && r.t.includes('Dai che ci siamo!') && r.passi === prima ? 'ok - tifo: sei frasi pronte, nessun campo da scrivere; compare nella fantasquadra e non è un passo' : 'FALLITO tifo ' + JSON.stringify({ frasi, r, prima }));
+  // un compagno fa il tifo: alla prossima apertura è tra le novità
+  const amico = gruppo.find(x => x.id !== idLucky);
+  await db.query(`select public.gioco_ragazzo($1, 'tifo', '{"frase":1}')`, [tok[amico.s]]);
+  await K.page.reload(); await K.page.waitForSelector('.festa'); let visto = false;
+  while (await K.page.$('.festa .btn')) { if ((await K.page.evaluate(() => document.querySelector('.festa .scatola').textContent)).includes(amico.s + ' fa il tifo: Grande squadra!')) { visto = true; await shot(K.page, '21d-novita-tifo'); } await K.page.click('.festa .btn'); await K.page.waitForTimeout(350); }
+  console.log(visto ? 'ok - il tifo di un compagno arriva tra le novità all\'apertura' : 'FALLITO tifo ricevuto');
+  // i compagni fanno i passi che mancano: missione compiuta, 10 trofei a chi ha dato una mano
+  const st = await K.page.evaluate(() => ({ t: S.c.trofei, M: S.io.missione }));
+  await db.query(`insert into public.gioco_eventi (squadra, giocatore, tipo, dati, autore, settimana, mese)
+    select '2015', $1, 'gg', jsonb_build_object('a', $2::text, 'frase', 0), 'ragazzo', public.gioco_settimana(), public.gioco_mese() from generate_series(1, $3::integer)`, [amico.id, idLucky, st.M.traguardo - st.M.passi]);
+  await K.page.reload(); await K.page.waitForSelector('.festa'); visto = false;
+  while (await K.page.$('.festa .btn')) { if ((await K.page.evaluate(() => document.querySelector('.festa .scatola').textContent)).includes('Missione compiuta!')) { visto = true; await K.page.waitForTimeout(600); await shot(K.page, '21e-missione-compiuta'); } await K.page.click('.festa .btn'); await K.page.waitForTimeout(350); }
+  await K.page.click('[data-act=tab][data-k=squadra]'); await K.page.waitForSelector('.fanta .passi.fatta');
+  const dopo = await K.page.evaluate(() => ({ t: S.c.trofei, M: S.io.missione, trag: 0 }));
+  // i GG ricevuti valgono 3 trofei l'uno: i 10 della missione si contano a parte
+  const gg = (st.M.traguardo - st.M.passi) * 3;
+  console.log(visto && dopo.M.compiuta && dopo.t === st.t + 10 + gg ? 'ok - missione compiuta: festa all\'apertura e 10 trofei' : 'FALLITO missione compiuta ' + JSON.stringify({ visto, st, dopo, gg }));
+  await K.page.evaluate(() => document.querySelector('.fanta').scrollIntoView({ block: 'start' })); await K.page.waitForTimeout(1500); await shot(K.page, '21f-fantasquadra-compiuta');
+  await spia(K.page); }
 // trofei
 await K.page.click('[data-act=tab][data-k=strada]');
 await full(K.page, '22-ragazzo-trofei');
@@ -316,16 +355,18 @@ await shot(K.page, '24b-esultanza');
   await F.ctx.close(); }
 // chi giocava già prima della versione 3 trova una volta sola «Il gioco è cresciuto!» con i premi già guadagnati
 { const attesi = await K.page.evaluate(() => STRADA.filter(tp => tp.n === 3 && tp.t <= S.c.trofei).flatMap(tp => tp.premi).length);
-  await K.page.evaluate(id => { localStorage.removeItem('ngu:v3:' + id); localStorage.removeItem('ngu:v4:' + id); }, idLucky);
+  await K.page.evaluate(id => { for (const v of ['v3', 'v4', 'v5']) localStorage.removeItem('ngu:' + v + ':' + id); }, idLucky);
   await K.page.reload(); await K.page.waitForSelector('.festa');
-  let visto = null, n = 0, sfideNuove = false;
+  let visto = null, n = 0, sfideNuove = false, missioneNuova = false;
   while (await K.page.$('.festa .btn')) { const t = await K.page.evaluate(() => document.querySelector('.festa .scatola').textContent);
+    if (t.includes('Novità nel gioco') && t.includes('Missione di fantasquadra')) { missioneNuova = true; await shot(K.page, '31c-missione-nuova'); }
     if (t.includes('Sfide nuove!')) { sfideNuove = true; await shot(K.page, '31b-sfide-nuove'); }
     if (t.includes('Il gioco è cresciuto')) { visto = await K.page.evaluate(() => document.querySelectorAll('.festa .premio').length); await shot(K.page, '31-gioco-cresciuto'); }
     n++; await K.page.click('.festa .btn'); await K.page.waitForTimeout(350); }
   await K.page.reload(); await K.page.waitForSelector('.eroe'); await K.page.waitForTimeout(400);
   console.log(visto === attesi && attesi >= 2 && !(await K.page.$('.festa .btn')) ? `ok - «Il gioco è cresciuto!» compare una volta sola, con i ${attesi} premi nuovi già guadagnati` : 'FALLITO gioco cresciuto: premi ' + visto + ' attesi ' + attesi + ', feste ' + n);
-  console.log(sfideNuove ? 'ok - «Sfide nuove!» compare una volta sola a chi giocava già' : 'FALLITO avviso delle sfide nuove'); }
+  console.log(sfideNuove ? 'ok - «Sfide nuove!» compare una volta sola a chi giocava già' : 'FALLITO avviso delle sfide nuove');
+  console.log(missioneNuova ? 'ok - «Missione di fantasquadra» spiegata una volta sola a chi giocava già' : 'FALLITO avviso della missione nuova'); }
 // boss battuto: schermata intera alla prossima apertura
 { await db.query(`update public.gioco_squadre set impostazioni = jsonb_set(impostazioni, '{hp}', '1')`);   // energia al minimo (300)
   await db.query(`insert into public.gioco_eventi (squadra, giocatore, tipo, dati, autore, settimana, mese)
@@ -348,7 +389,7 @@ await shot(K.page, '24b-esultanza');
   for (const v of [5, 6, 7, 8, 9]) await ev(ids.Edo, 'sfida', { sfida: 'bersaglio', valore: v }, 21);     // tre settimane fa: regole di prima
   for (const v of [5.2, 4.9, 5.0]) await ev(ids.Edo, 'combine', { prova: 'sprint', valore: v }, 0, 'mister');
   for (const v of [12, 15]) await ev(ids.Edo, 'combine', { prova: 'palleggi', valore: v }, 0, 'mister');
-  for (const g of Object.values(ids)) { await ev(g, 'sfida', { sfida: 'stop', valore: 4 }); await ev(g, 'stella', { area: 'impegno', frase: 0 }, 0, 'mister').catch(() => {}); }
+  for (const g of Object.values(ids)) { for (const v of [4, 3, 2]) await ev(g, 'sfida', { sfida: 'stop', valore: v }); for (const a of ['impegno', 'coraggio']) await ev(g, 'stella', { area: a, frase: 0 }, 0, 'mister'); }
   await D.page.reload(); await D.page.waitForSelector('[data-act=stab]');
   const mesi = (await db.query(`select distinct mese from public.gioco_eventi union select public.gioco_mese_settimana(public.gioco_settimana())`)).rows.map(r => r.mese);
   const app = await D.page.evaluate(() => { const X = datiStaff(); return { calc: Object.fromEntries(X.attivi.map(g => [g.id, X.calc[g.id].mesi])), bonus: S.staff.trii.filter(t => t.bonus).length, r4: R4 }; });
@@ -361,6 +402,9 @@ await D.page.reload(); await D.page.waitForSelector('[data-act=stab]');
 await D.page.click('[data-act=stab][data-k=squadra]');
 await D.page.waitForTimeout(800);
 await full(D.page, '25-dir-squadra');
+{ const r = await D.page.evaluate(() => ({ pagina: document.getElementById('app').textContent, testo: testoRiep(), compiute: datiRiep().trii, gruppi: datiRiep().triiTot }));
+  console.log(/\d+ passi su \d+/.test(r.pagina) && r.pagina.includes('lo vedete solo voi') && r.testo.includes('con la missione compiuta') && r.compiute >= 2 && r.compiute <= r.gruppi
+    ? `ok - mister e dirigente vedono i passi di ogni fantasquadra; nel riepilogo ${r.compiute} missioni compiute su ${r.gruppi}` : 'FALLITO fantasquadre per lo staff ' + JSON.stringify({ compiute: r.compiute, gruppi: r.gruppi, testo: r.testo.slice(0, 200) })); }
 const dataUrl = await D.page.evaluate(() => document.getElementById('riepilogo').toDataURL('image/png'));
 (await import('fs')).writeFileSync(new URL('./shots/26-riepilogo-esportato.png', import.meta.url), Buffer.from(dataUrl.split(',')[1], 'base64'));
 await D.page.click('[data-act=stab][data-k=stelle]');

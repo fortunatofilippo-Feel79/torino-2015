@@ -85,6 +85,22 @@ schermata. I trofei nuovi volano sulla coppa in alto e il boss trema quando la s
   festa del record c'è sempre.
 - **Boss**: adesso lo colpisce davvero ogni trofeo, anche i record e il bonus della fantasquadra.
 
+**Dalla versione 5** (16 novembre 2026):
+
+- **Missione di fantasquadra**: i tre o quattro compagni sorteggiati il lunedì hanno un
+  traguardo comune, i passi di squadra. Un passo per ogni sfida a casa (le prime tre), per ogni
+  stella del mister e per ogni GG mandato. Il traguardo è 4 passi a testa: 12 in tre, 16 in
+  quattro. Quando ci arrivano, prende 10 trofei chi ha fatto almeno un passo. Sostituisce il
+  vecchio bonus e parte dal lunedì dopo l'aggiornamento.
+- **Cosa vedono tra loro**: il totale del gruppo e, per ogni compagno, solo «ha dato una mano»
+  oppure «non ancora». Non vedono quanti passi ha fatto ognuno.
+- **Tifo**: possono mandare a tutta la fantasquadra una frase tra sei già pronte («Dai che ci
+  siamo!», «Grande squadra!»…), al massimo tre a settimana. Non si può scrivere niente a mano.
+- **Per mister e dirigente**: nella scheda **Squadra**, in **Fantasquadre della settimana**,
+  vedete i passi di ogni gruppo e quelli di ogni ragazzo. Serve a capire chi incoraggiare: le
+  stelle che date sono passi anche per la sua fantasquadra. Nel riepilogo per i genitori
+  compare solo quante missioni sono state compiute, senza nomi.
+
 **Suoni**: ci sono solo nell'app dei ragazzi, non in quella del mister e del dirigente. Il
 ragazzo li spegne con l'altoparlante in alto; su iPhone tacciono anche con il tasto
 silenzioso. Il timer delle sfide fischia all'inizio e alla fine.

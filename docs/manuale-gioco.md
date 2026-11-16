@@ -1,6 +1,7 @@
 # Gioco NEVER GIVE UP — manuale tecnico
 
-Versione 4, 16 novembre 2026 (sei sfide nuove, sfida della settimana, autovalutazione dal
+Versione 5, 16 novembre 2026 (missione di fantasquadra a passi e tifo tra compagni: **cambia
+lo SQL**). Versione 4 del 16 novembre 2026 (sei sfide nuove, sfida della settimana, autovalutazione dal
 venerdì, record solo nelle prime tre sfide, il boss conta ogni trofeo: **cambia lo SQL**).
 Versione 3 del 15 novembre 2026 (il Fighter fa mosse ed esultanze, medaglie, traguardi, strada
 più fitta, boss a fasi). Versione 2 del 2 novembre 2026 (grafica, movimento e suoni). Versione 1
@@ -31,8 +32,11 @@ trofei al massimo, il boss cambia faccia, la pagina Fighter dice cosa si può fa
 Vedi «Versione 3». Con la versione 3 il database non è cambiato.
 
 Dalla versione 4 le sfide a casa sono dodici, ogni lunedì ce n'è una «della settimana» che
-vale di più, e sono corretti tre difetti di regole. Vedi «Versione 4». **Lo SQL è cambiato e
-va rilanciato in Supabase prima di approvare la pull request.**
+vale di più, e sono corretti tre difetti di regole. Vedi «Versione 4».
+
+Dalla versione 5 la fantasquadra ha una missione comune, i passi di squadra, e i compagni
+possono farsi il tifo con frasi pronte. Vedi «Versione 5». **Lo SQL è cambiato e va rilanciato
+in Supabase prima di approvare la pull request.**
 
 ## File
 
@@ -84,7 +88,7 @@ Dopo 8 PIN sbagliati il PIN si blocca: il dirigente ne imposta uno nuovo.
 |---|---|
 | `gioco_squadre` | una riga per annata: codice invito, codice mister, impostazioni (tra cui `regole4`: la settimana da cui valgono le regole della versione 4) |
 | `gioco_giocatori` | ragazzi: nome della rosa, soprannome, numero, avatar, stato (attesa · attivo · sospeso) |
-| `gioco_eventi` | tutto ciò che succede: stella, mossa, sfida, obiettivo, autovalutazione, gg, combine, greencard |
+| `gioco_eventi` | tutto ciò che succede: stella, mossa, sfida, obiettivo, autovalutazione, gg, combine, greencard, tifo |
 | `gioco_trii` | fantasquadre di ogni settimana |
 | `gioco_boss` | boss sconfitti, uno per mese |
 
@@ -93,7 +97,8 @@ funzioni, che controllano ogni volta link, codice o password e rispondono sempre
 `{ok:true,…}` oppure `{errore:'…'}`. La rosa viene letta da `stato.dati.roster` dell'app partite.
 
 I ragazzi vedono dei compagni solo soprannome, numero e avatar. Non vedono trofei, tempi
-del combine né chi è il figlio del dirigente.
+del combine né chi è il figlio del dirigente. Dei compagni della propria fantasquadra vedono
+in più se hanno già dato una mano alla missione (sì o no, mai quanti passi) e le frasi di tifo.
 
 ## Regole del gioco
 
@@ -109,7 +114,8 @@ del combine né chi è il figlio del dirigente.
 | GG mandato / ricevuto | 2 / 3 |
 | combine | 5 a prova, +10 se batte il record |
 | Green Card | 50 |
-| bonus fantasquadra | 10 a testa |
+| missione di fantasquadra compiuta (versione 5) | 10 a chi ha fatto almeno un passo |
+| bonus fantasquadra (settimane prima della versione 5) | 10 a testa |
 | boss del mese sconfitto | 20 a chi ha contribuito |
 
 **Limiti**: una stella per area, per ragazzo, per settimana. Una mossa si sblocca una volta.
@@ -140,7 +146,18 @@ rispetto (FAIR PLAY), squadra (ONE TEAM), calcolata dal numero della settimana.
 
 **Fantasquadra**: creata al primo accesso di ogni settimana (lunedì), gruppi da 3 o 4
 sorteggiati. Chi entra a settimana iniziata va nel gruppo più piccolo (nuovo gruppo se
-tutti hanno già 3). Bonus se tutti, almeno in due, hanno una sfida e una stella.
+tutti hanno già 3). Fino alla versione 4: bonus se tutti, almeno in due, hanno una sfida e
+una stella.
+
+**Missione di fantasquadra** (versione 5): un passo per ogni sfida a casa (le prime tre
+della settimana), per ogni stella del mister e per ogni GG mandato. Traguardo: 4 passi per
+ogni compagno del gruppo (12 in tre, 16 in quattro). Quando il gruppo, almeno in due, ci
+arriva, la missione è compiuta e prende 10 trofei chi ha fatto almeno un passo. Chi è da
+solo nel gruppo (arrivato dopo il sorteggio) aspetta il lunedì.
+
+**Tifo** (versione 5): una frase pronta, tra sei, per tutta la propria fantasquadra. Al
+massimo tre a settimana. Non dà trofei, non è un passo e non conta come «aver fatto qualcosa
+nel mese» per il boss.
 
 **Boss**: energia = 150 × ragazzi attivi (minimo 300), modificabile nelle impostazioni.
 Ogni trofeo del mese toglie energia: dalla versione 4 anche i bonus dei record (sfide e
@@ -241,6 +258,34 @@ minuti tra le due cose) chi prova ad autovalutarsi prima di venerdì vede «Qual
 I due collaudi la sostituiscono con una versione fissa (mercoledì, venerdì) per provare le
 regole in qualunque giorno li si lanci; la funzione vera è provata a parte con date precise.
 
+## Versione 5: missione di fantasquadra e tifo
+
+**Lo SQL è cambiato.** Va lanciato in Supabase › SQL Editor **prima** di approvare la pull
+request. Si può rilanciare senza perdere dati.
+
+Scelte di Filippo del 16 novembre 2026: contano i passi (impegno) e non la somma dei
+risultati; i ragazzi interagiscono con il tifo a frasi pronte; la missione sostituisce il
+vecchio bonus; dei compagni si vede solo il totale e una spunta.
+
+| Cosa | Dove | Come funziona |
+|---|---|---|
+| Passi e traguardo | `gioco_missione_stato()` nello SQL | conta i passi di ogni compagno e del gruppo, il traguardo, se la missione è compiuta e chi prende il bonus. È l'unico posto con la regola: l'app non la rifà |
+| Bonus | `gioco_trii_stato()` nello SQL | stesse colonne di prima; il bonus segue la regola della settimana (missione o regola vecchia). Lo usano trofei, bacheca e boss, che quindi non sono cambiati |
+| Missione nell'app | `tSquadra()` in `gioco.html` | barra «N passi su M», per ogni compagno «ha dato una mano» o «non ancora», tasto GG. Una riga anche tra i prossimi traguardi |
+| Solo sì o no | `gioco_io()` nello SQL | al ragazzo arrivano il totale del gruppo (`missione`) e per ogni compagno solo `fatto`. I passi di ognuno non escono dal database |
+| Tifo | `TIFO_FRASI`, `fTifo()`; azione `tifo` in `gioco_ragazzo()` | sei frasi pronte, nessun campo da scrivere. Il database accetta solo l'indice da 0 a 5 |
+| Feste | `festaMissione()`, `festaMissioneNuova()` in `novita()` | «Missione compiuta!» alla prima apertura dopo il traguardo; il tifo dei compagni tra le novità; la spiegazione una volta sola (`localStorage` `ngu:v5:ID`) |
+| Mister e dirigente | `sSquadra()`, `gruppoFatto()`, `datiRiep()` | in Squadra vedono per ogni fantasquadra i passi su traguardo e i passi di ognuno. Nel riepilogo per i genitori: «missioni di fantasquadra» compiute, senza nomi |
+
+**Da quando vale.** La missione cambia chi prende i 10 trofei, quindi non vale all'indietro:
+parte dalla settimana in `gioco_squadre.impostazioni.regole5`, scritta dallo SQL al primo
+lancio (il lunedì successivo per le squadre che giocano già, subito per quelle nuove). Nella
+settimana del passaggio i ragazzi vedono ancora il bonus vecchio e la riga «Da lunedì la
+fantasquadra ha una missione comune». Il tifo invece vale subito.
+
+**Ordine giusto**: prima lo SQL, poi l'approvazione. Con lo SQL nuovo e l'app vecchia non
+succede niente di strano. Con l'app nuova e lo SQL vecchio il tifo non compare.
+
 ## Cosa succede da solo
 
 Nessun programma pianificato da mantenere: è tutto calcolato quando qualcuno apre l'app.
@@ -251,6 +296,11 @@ Il ragazzo in attesa entra da solo appena approvato: la pagina si aggiorna ogni 
 ## Tutele
 
 - Niente chat, niente testo libero tra ragazzi, niente foto: solo avatar e frasi pronte.
+- Il tifo è fatto solo di sei frasi pronte, tutte positive e rivolte al gruppo: nessuna
+  punta il dito su chi non ha ancora fatto la sua parte. Tre a settimana al massimo.
+- Nella missione i ragazzi vedono il totale del gruppo e, per ogni compagno, solo se ha già
+  dato una mano. Il numero di passi di ognuno lo vedono solo mister e dirigente: tra i
+  ragazzi non c'è nessuna classifica, nemmeno a tre.
 - Niente classifica individuale, niente casse a sorpresa, niente serie da non perdere,
   nessuna notifica ai ragazzi.
 - Le medaglie non sono una serie: contano i giorni diversi, anche lontani tra loro, e non si
@@ -293,6 +343,11 @@ possa rieseguire senza perdere dati.
   esistono: i ragazzi perderebbero premi già presi. Ogni premio deve esistere nel suo elenco
   (`KIT`, `SCARPE`, `SFONDI`, `CORNICI`, `ACCESSORI`, `ESULTANZE`) e avere il disegno in
   `icoPremio()`; uno sfondo ha anche lo stile `.sf-NOME`.
+- **Missione di fantasquadra**: cosa vale un passo e il traguardo (4 a testa) sono solo in
+  `gioco_missione_stato()` nello SQL. Il testo che lo spiega ai ragazzi è in `tSquadra()` e
+  quello per lo staff in `sSquadra()`: se cambi la regola, cambia anche i due testi.
+- **Frasi del tifo**: `TIFO_FRASI` in `gioco.html`. Se cambia il loro numero, cambia anche
+  il controllo `^[0-5]$` nell'azione `tifo` di `gioco_ragazzo()`.
 - **Medaglie**: giorni richiesti in `MEDAGLIE`. Abbassarli regala medaglie, alzarli le toglie.
 - **Facce del Fighter**: elenco `OCCHI` e il `switch` delle facce in `fighterSVG()`. Le chiavi
   dell'avatar non sono controllate dallo SQL: niente da rilanciare.
@@ -310,8 +365,8 @@ Si lancia dalla cartella `test/`:
 ```
 cd test
 npm install
-npm test        # database: 88 controlli, deve finire senza righe FALLITO
-npm run e2e     # app su telefono simulato: 40 controlli, 54 schermate + l'immagine esportata in
+npm test        # database: 101 controlli, deve finire senza righe FALLITO
+npm run e2e     # app su telefono simulato: 47 controlli, 59 schermate + l'immagine esportata in
                 # test/shots/, nessuna riga FALLITO, "ERRORI: nessuno"
 npm run anteprima   # facoltativo: nove Fighter diversi in test/shots/anteprima-fighter.png
 ```
@@ -342,6 +397,13 @@ npm run anteprima   # facoltativo: nove Fighter diversi in test/shots/anteprima-
   giorno della settimana, giro delle dodici sfide, autovalutazione troppo presto o nello
   stesso giorno, regole nuove e regole di prima, record a tempo, bonus fantasquadra e record
   del combine nel boss, solo sei funzioni chiamabili, SQL rilanciato due volte senza perdere dati.
+  Dalla versione 5 controlla anche: barra dei passi uguale al conto fatto a parte sul
+  database, nessun numero a testa mandato al ragazzo, il GG che vale un passo, tifo con sei
+  frasi e nessun campo da scrivere, tifo di un compagno tra le novità, «Missione compiuta!»
+  con i 10 trofei, la spiegazione una volta sola, la vista dello staff e il riepilogo. Il
+  collaudo del database prova in più: passi e traguardo, sfide oltre la terza che non sono
+  passi, bonus solo a chi ha fatto un passo, niente bonus sotto il traguardo, regola vecchia
+  per le settimane di prima, tifo (frasi, limite, chi lo vede, da soli no, non vale per il boss).
 - **Fotogrammi**: `30-fotogrammi-mosse.png` e `30-fotogrammi-esultanze.png` mostrano ogni
   movimento fermato in quattro momenti, a grandezza vera. Vanno guardati dopo ogni modifica a
   `MOSSA_ANIM`, `ES_ANIM` o al disegno del Fighter.
@@ -351,8 +413,8 @@ npm run anteprima   # facoltativo: nove Fighter diversi in test/shots/anteprima-
   collaudo dell'app non è fatto: va detto, non dato per buono.
 - L'immagine del riepilogo è lo stesso canvas che si vede a schermo.
 
-Ultimo collaudo: 16 novembre 2026 (versione 4), dalla cartella `test/` del repository. 88
-controlli sul database superati; app: 40 controlli superati, 54 schermate più l'immagine
+Ultimo collaudo: 16 novembre 2026 (versione 5), dalla cartella `test/` del repository. 101
+controlli sul database superati; app: 47 controlli superati, 59 schermate più l'immagine
 esportata, 16 suoni registrati, zero errori in console.
 
 ## Difetti corretti nella versione 4
@@ -363,9 +425,9 @@ Trovati nella valutazione del 15 novembre 2026, corretti il 16 novembre 2026.
 - **Record senza tetto**: ora il +5 vale solo in una delle prime tre sfide della settimana.
 - **Il boss non contava tutti i trofei**: ora conta anche record e bonus fantasquadra.
 
-Ancora fuori, da decidere con Filippo: la missione di fantasquadra a somma («in tre fate 150
-tocchi»). Chi salta il fine settimana non può autovalutarsi per quella settimana: è voluto,
-ma se pesa si può allargare al lunedì successivo (servirebbe SQL).
+La missione di fantasquadra è arrivata con la versione 5. Ancora da decidere con Filippo: chi
+salta il fine settimana non può autovalutarsi per quella settimana. È voluto, ma se pesa si
+può allargare al lunedì successivo (servirebbe SQL).
 
 ## Lasciato fuori dalla versione 1 (di proposito)
 
