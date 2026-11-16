@@ -24,7 +24,7 @@ ok((await call('gioco_staff', {p_squadra:S, p_chiave:'cod-aiutante'})).errore ==
 ok((await call('gioco_staff_azione', {p_squadra:S, p_chiave:P, p_azione:'attiva', p_dati:{}})).ok, 'attivazione');
 st = await call('gioco_staff', {p_squadra:S, p_chiave:P});
 const W = st.ora.settimana;
-ok(st.squadra.impostazioni.regole4 === W, 'squadra nuova: regole della versione 4 da subito (' + W + ')');
+ok(st.squadra.impostazioni.regole4 === W && st.squadra.impostazioni.regole5 === W, 'squadra nuova: regole delle versioni 4 e 5 da subito (' + W + ')');
 const INV = st.squadra.codice_invito, MIS = st.squadra.codice_mister;
 ok(/^[A-HJ-NP-Z2-9]{6}$/.test(INV) && MIS.length===10, 'codici generati '+INV);
 ok((await call('gioco_staff', {p_squadra:S, p_chiave:MIS})).ruolo === 'mister' && (await call('gioco_staff', {p_squadra:S, p_chiave:MIS})).squadra.codice_invito == null, 'mister non vede i codici');
@@ -101,7 +101,42 @@ await call('gioco_staff_azione', {p_squadra:S, p_chiave:MIS, p_azione:'mossa', p
 // trio bonus: tutti con sfida e stella
 for (const s of ['Lucky7','Tommi','Ale','Dado']) { await call('gioco_ragazzo', {p_token: tok[s==='Lucky7'?'Lucky':s], p_azione:'sfida', p_dati:{sfida:'muro_f', valore:'18', pin:'1234'}}); }
 for (const s of ['Lucky7','Ale','Dado']) await call('gioco_staff_azione', {p_squadra:S, p_chiave:MIS, p_azione:'stella', p_dati:{giocatore:id[s], area:'squadra', frase:1}});
-io = await call('gioco_io', {p_token: tok.Bomber}); ok(io.trio.every(t=>t.bonus) && io.bonus_trio.length===1, 'bonus trio raggiunto');
+// missione di fantasquadra (versione 5): passi = sfide a casa (al massimo 3) + stelle + GG mandati; traguardo 4 a testa
+const passiVeri = async () => { let n = 0; for (const r of await q(`select tipo, giocatore, count(*) c from public.gioco_eventi where settimana = $1 and tipo in ('sfida','stella','gg') and giocatore = any($2::uuid[]) group by 1, 2`, [W, ['Lucky7','Bomber','Tommi','Ale','Dado'].map(s => id[s])])) n += r.tipo === 'sfida' ? Math.min(3, Number(r.c)) : Number(r.c); return n; };
+io = await call('gioco_io', {p_token: tok.Bomber});
+ok(io.missione.membri === 5 && io.missione.traguardo === 20 && io.missione.passi === await passiVeri() && io.missione.passi < 20 && !io.missione.compiuta && io.bonus_trio.length === 0, 'missione di fantasquadra: ' + io.missione.passi + ' passi su 20, non ancora compiuta');
+ok(io.trio.every(t => t.passi === undefined && t.totale === undefined && t.fatto === true), 'dei compagni il ragazzo riceve solo «ha dato una mano», mai i passi di ognuno');
+// con la regola di prima (settimane precedenti al passaggio) bastava una sfida e una stella a testa
+await q(`update public.gioco_squadre set impostazioni = impostazioni || '{"regole5":"9999-W01"}'::jsonb where id = $1`, [S]);
+io = await call('gioco_io', {p_token: tok.Bomber}); ok(io.trio.every(t=>t.bonus) && io.bonus_trio.length===1, 'regola di prima: bonus a tutti con una sfida e una stella a testa');
+await q(`update public.gioco_squadre set impostazioni = impostazioni || jsonb_build_object('regole5', $2::text) where id = $1`, [S, W]);
+// i GG sono passi: mandandoseli la fantasquadra arriva al traguardo
+{ const cinque = ['Lucky7','Bomber','Tommi','Ale','Dado'];
+  for (const a of cinque) for (const b of cinque) if (a !== b && (await call('gioco_io', {p_token: tok.Bomber})).missione.passi < 20) await call('gioco_ragazzo', {p_token: tok[a === 'Lucky7' ? 'Lucky' : a], p_azione:'gg', p_dati:{a:id[b], frase:1}});
+  io = await call('gioco_io', {p_token: tok.Bomber});
+  ok(io.missione.passi === 20 && io.missione.passi === await passiVeri() && io.missione.compiuta && io.trio.every(t=>t.bonus) && io.bonus_trio.length===1, 'missione compiuta a 20 passi: bonus a chi ha dato una mano'); }
+// chi non ha fatto nemmeno un passo non prende il bonus; sotto il traguardo non lo prende nessuno (settimane finte, poi cancellate)
+{ const ev = (g, tipo, sett, n) => q(`insert into public.gioco_eventi (squadra, giocatore, tipo, dati, autore, settimana, mese) select $1, $2, $3, '{}'::jsonb, 'mister', $4, '9998-03' from generate_series(1, $5::integer)`, [S, g, tipo, sett, n]);
+  const stato = async sett => Object.fromEntries((await q(`select x.soprannome s, m.passi, m.totale, m.traguardo, m.compiuta, m.bonus from public.gioco_missione_stato($1) m join public.gioco_giocatori x on x.id = m.giocatore where m.settimana = $2`, [S, sett])).map(r => [r.s, r]));
+  for (const s of ['Lucky7','Tommi','Dado']) await q(`insert into public.gioco_trii values ($1, '9998-W10', $2, 0)`, [S, id[s]]);
+  await ev(id.Lucky7, 'sfida', '9998-W10', 5); await ev(id.Lucky7, 'stella', '9998-W10', 4); await ev(id.Tommi, 'gg', '9998-W10', 5);
+  let m = await stato('9998-W10');
+  ok(m.Lucky7.passi === 7 && m.Tommi.passi === 5 && m.Dado.passi === 0 && m.Lucky7.totale === 12 && m.Lucky7.traguardo === 12 && m.Lucky7.compiuta && m.Lucky7.bonus && m.Tommi.bonus && m.Dado.compiuta && !m.Dado.bonus, 'missione: le sfide oltre la terza non sono passi; a 12 su 12 bonus a Lucky e Tommi, non a Dado che non ha fatto un passo');
+  await q(`delete from public.gioco_eventi where id = (select max(id) from public.gioco_eventi where settimana = '9998-W10' and tipo = 'gg')`);
+  m = await stato('9998-W10'); ok(m.Lucky7.totale === 11 && !m.Lucky7.compiuta && !m.Lucky7.bonus && !m.Tommi.bonus, 'missione: a 11 su 12 non è compiuta e nessuno prende il bonus');
+  // regola di prima su una settimana vecchia: due compagni con una sfida e una stella a testa (4 passi su 8) hanno il bonus
+  for (const s of ['Lucky7','Tommi']) { await q(`insert into public.gioco_trii values ($1, '2000-W10', $2, 0)`, [S, id[s]]); await ev(id[s], 'sfida', '2000-W10', 1); await ev(id[s], 'stella', '2000-W10', 1); }
+  m = await stato('2000-W10'); ok(m.Lucky7.totale === 4 && m.Lucky7.traguardo === 8 && m.Lucky7.bonus && m.Tommi.bonus, 'settimane prima del passaggio: resta la regola vecchia (bonus con 4 passi su 8)');
+  await q(`delete from public.gioco_eventi where settimana in ('9998-W10', '2000-W10')`); await q(`delete from public.gioco_trii where settimana in ('9998-W10', '2000-W10')`); }
+// tifo: una frase pronta a tutta la fantasquadra, al massimo tre a settimana; non è un passo e non dà trofei
+{ const prima = (await call('gioco_io', {p_token: tok.Ale})).missione.passi, dPrima = await danni(id.Ale, st.ora.mese);
+  ok((await call('gioco_ragazzo', {p_token: tok.Ale, p_azione:'tifo', p_dati:{frase:2}})).ok, 'tifo alla fantasquadra');
+  ok((await call('gioco_ragazzo', {p_token: tok.Ale, p_azione:'tifo', p_dati:{frase:9}})).errore === 'tifo' && (await call('gioco_ragazzo', {p_token: tok.Ale, p_azione:'tifo', p_dati:{frase:'<b>ciao'}})).errore === 'tifo', 'tifo: solo le frasi pronte, niente testo libero');
+  io = await call('gioco_io', {p_token: tok.Bomber});
+  ok(io.tifo.length === 1 && io.tifo[0].da === 'Ale' && io.tifo[0].frase === 2 && io.tifo[0].da_id === id.Ale, 'il compagno di fantasquadra vede il tifo con il mittente');
+  await call('gioco_ragazzo', {p_token: tok.Ale, p_azione:'tifo', p_dati:{frase:0}}); await call('gioco_ragazzo', {p_token: tok.Ale, p_azione:'tifo', p_dati:{frase:1}});
+  ok((await call('gioco_ragazzo', {p_token: tok.Ale, p_azione:'tifo', p_dati:{frase:3}})).errore === 'troppo_tifo', 'tifo: al massimo tre a settimana');
+  ok((await call('gioco_io', {p_token: tok.Ale})).missione.passi === prima && await danni(id.Ale, st.ora.mese) === dPrima, 'il tifo non è un passo e non toglie energia al boss'); }
 // il bonus fantasquadra toglie energia al boss: 10 a testa, nel mese della domenica di quella settimana
 { const mb = (await q(`select public.gioco_mese_settimana($1) m`, [W]))[0].m, con = await danni(id.Tommi, mb);
   await q(`delete from public.gioco_trii where giocatore = $1 and settimana = $2`, [id.Tommi, W]);
@@ -128,6 +163,11 @@ ok((await call('gioco_staff_azione', {p_squadra:S, p_chiave:P, p_azione:'nuovo_p
 const r7 = await call('gioco_iscrivi', {p_squadra:S, p_invito:INV, p_rosa_id:'r7', p_nome:null, p_soprannome:'Edo', p_numero:8, p_avatar:{}, p_pin:'1111'});
 const idEdo = r7.id; await call('gioco_staff_azione', {p_squadra:S, p_chiave:P, p_azione:'approva', p_dati:{giocatore:idEdo}});
 io = await call('gioco_io', {p_token: r7.token}); ok(io.trio && io.trio.length===1, 'nuovo arrivato: gruppo nuovo perché gli altri hanno già 3+ ('+(io.trio||[]).length+')');
+// Edo è arrivato dopo il sorteggio ed è da solo nel suo gruppo: niente tifo, e non vede quello degli altri
+ok((await call('gioco_ragazzo', {p_token: r7.token, p_azione:'tifo', p_dati:{frase:1}})).errore === 'solo' && io.tifo.length === 0 && io.missione.membri === 1 && !io.missione.compiuta, 'da solo nel gruppo: niente tifo e niente missione');
+// il tifo non vale come «aver fatto qualcosa nel mese» per il premio del boss
+await q(`insert into public.gioco_eventi (squadra, giocatore, tipo, dati, autore, settimana, mese) values ($1, $2, 'tifo', '{"frase":1}'::jsonb, 'ragazzo', $3, $4)`, [S, idEdo, W, st.ora.mese]);
+ok((await call('gioco_io', {p_token: r7.token})).boss_vinti.length === 0, 'solo tifo nel mese: niente premio del boss');
 // sfide nuove e regole della versione 4, su Edo che non ha ancora fatto niente
 { const M = st.ora.mese, sett = (await q(`select public.gioco_sfida_settimana($1) k`, [W]))[0].k, altra = sett === 'bersaglio' ? 'stop' : 'bersaglio';
   const sf = (k, v) => call('gioco_ragazzo', {p_token: r7.token, p_azione:'sfida', p_dati:{sfida:k, valore:String(v), pin:'1111'}});
@@ -169,9 +209,9 @@ ok(ctl.map(x=>x.nome).join(',') === 'gioco_io,gioco_iscrivi,gioco_pubblico,gioco
   const conta = async () => (await q(`select (select count(*) from public.gioco_eventi) e, (select count(*) from public.gioco_giocatori) g, (select count(*) from public.gioco_trii) t, (select count(*) from public.gioco_boss) b`))[0];
   const prima = JSON.stringify(await conta());
   await db.exec(sql);
-  const r1 = Object.fromEntries((await q(`select id, impostazioni->>'regole4' r from public.gioco_squadre`)).map(x => [x.id, x.r]));
+  const r1 = Object.fromEntries((await q(`select id, (impostazioni->>'regole4') || ' ' || (impostazioni->>'regole5') r from public.gioco_squadre`)).map(x => [x.id, x.r]));
   const prossima = (await q(`select public.gioco_settimana(now() + interval '7 days') w`))[0].w;
   await db.exec(sql);
-  const r2 = Object.fromEntries((await q(`select id, impostazioni->>'regole4' r from public.gioco_squadre`)).map(x => [x.id, x.r]));
-  ok(r1['2014'] === prossima && r1['2015'] === W && JSON.stringify(r1) === JSON.stringify(r2), 'SQL rilanciato due volte: la squadra che giocava già passa alle regole nuove da ' + prossima + ', l\'altra non cambia');
+  const r2 = Object.fromEntries((await q(`select id, (impostazioni->>'regole4') || ' ' || (impostazioni->>'regole5') r from public.gioco_squadre`)).map(x => [x.id, x.r]));
+  ok(r1['2014'] === prossima + ' ' + prossima && r1['2015'] === W + ' ' + W && JSON.stringify(r1) === JSON.stringify(r2), 'SQL rilanciato due volte: la squadra che giocava già passa alle regole nuove da ' + prossima + ', l\'altra non cambia');
   ok(JSON.stringify(await conta()) === prima, 'SQL rilanciato: nessun dato perso ' + prima); }

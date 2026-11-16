@@ -1,5 +1,5 @@
 -- =====================================================================
--- Torino Club MP — gioco NEVER GIVE UP (novembre 2026, versione 4)
+-- Torino Club MP — gioco NEVER GIVE UP (novembre 2026, versione 5)
 -- Supabase › SQL Editor › New query: incolla tutto e premi Run.
 -- Si può rieseguire senza danni: non cancella i dati già salvati.
 -- Nessuna password o codice va scritto qui dentro.
@@ -286,24 +286,59 @@ begin
 end;
 $$;
 
--- stato dei trii: bonus se tutti (almeno due) hanno fatto una sfida e preso una stella
-create or replace function public.gioco_trii_stato(p_squadra text)
-returns table (settimana text, gruppo integer, giocatore uuid, ha_sfida boolean, ha_stella boolean, bonus boolean)
-language sql stable set search_path = '' as $$
-  with t as (
+-- Missione di fantasquadra (versione 5): i passi di squadra.
+-- Un passo per ogni sfida a casa (le prime tre della settimana), per ogni stella del mister
+-- e per ogni GG mandato. Traguardo: 4 passi per ogni compagno del gruppo. Quando il gruppo
+-- (almeno in due) ci arriva la missione è compiuta, e prende il bonus chi ha fatto almeno un passo.
+-- Vale dalla settimana scritta in impostazioni.regole5 (se manca, non vale ancora); prima vale
+-- la regola vecchia: bonus a tutti se tutti hanno fatto una sfida e preso una stella.
+create or replace function public.gioco_missione_stato(p_squadra text)
+returns table (settimana text, gruppo integer, giocatore uuid, ha_sfida boolean, ha_stella boolean,
+               passi integer, membri integer, totale integer, traguardo integer, compiuta boolean, bonus boolean)
+language plpgsql stable set search_path = '' as $$
+#variable_conflict use_column
+begin
+  return query
+  with reg as (
+    select coalesce((select s.impostazioni->>'regole5' from public.gioco_squadre s where s.id = p_squadra), '9999-W99') as da
+  ), t as (
     select t.settimana, t.gruppo, t.giocatore,
-           exists (select 1 from public.gioco_eventi e
-                   where e.giocatore = t.giocatore and e.settimana = t.settimana and e.tipo = 'sfida') as ha_sfida,
-           exists (select 1 from public.gioco_eventi e
-                   where e.giocatore = t.giocatore and e.settimana = t.settimana and e.tipo = 'stella') as ha_stella
+           (select count(*) from public.gioco_eventi e
+            where e.giocatore = t.giocatore and e.settimana = t.settimana and e.tipo = 'sfida')::integer as n_sfide,
+           (select count(*) from public.gioco_eventi e
+            where e.giocatore = t.giocatore and e.settimana = t.settimana and e.tipo = 'stella')::integer as n_stelle,
+           (select count(*) from public.gioco_eventi e
+            where e.giocatore = t.giocatore and e.settimana = t.settimana and e.tipo = 'gg')::integer as n_gg
     from public.gioco_trii t
     join public.gioco_giocatori x on x.id = t.giocatore and x.stato = 'attivo'
     where t.squadra = p_squadra
+  ), g as (
+    select t.settimana, t.gruppo, t.giocatore, t.n_sfide, t.n_stelle,
+           least(t.n_sfide, 3) + t.n_stelle + t.n_gg as passi,
+           (count(*) over w)::integer as membri,
+           (sum(least(t.n_sfide, 3) + t.n_stelle + t.n_gg) over w)::integer as totale,
+           (bool_and(t.n_sfide > 0 and t.n_stelle > 0) over w) as tutti
+    from t
+    window w as (partition by t.settimana, t.gruppo)
+  ), c as (
+    select g.*, g.settimana >= reg.da as nuova,
+           case when g.settimana >= reg.da then g.membri >= 2 and g.totale >= 4 * g.membri
+                else g.tutti and g.membri >= 2 end as compiuta
+    from g cross join reg
   )
-  select t.settimana, t.gruppo, t.giocatore, t.ha_sfida, t.ha_stella,
-         (bool_and(t.ha_sfida and t.ha_stella) over w) and (count(*) over w) >= 2
-  from t
-  window w as (partition by t.settimana, t.gruppo)
+  select c.settimana, c.gruppo, c.giocatore, c.n_sfide > 0, c.n_stelle > 0,
+         c.passi, c.membri, c.totale, 4 * c.membri, c.compiuta,
+         c.compiuta and (not c.nuova or c.passi >= 1)
+  from c;
+end;
+$$;
+
+-- stato dei trii come lo usano bonus, bacheca e boss: il bonus segue la regola della settimana (vedi sopra)
+create or replace function public.gioco_trii_stato(p_squadra text)
+returns table (settimana text, gruppo integer, giocatore uuid, ha_sfida boolean, ha_stella boolean, bonus boolean)
+language sql stable set search_path = '' as $$
+  select m.settimana, m.gruppo, m.giocatore, m.ha_sfida, m.ha_stella, m.bonus
+  from public.gioco_missione_stato(p_squadra) m
 $$;
 
 -- boss del mese: lo segna sconfitto quando danni >= energia e tutti hanno dato una mano
@@ -334,7 +369,7 @@ begin
   -- devono contribuire gli attivi entrati almeno 7 giorni prima della fine del mese
   select count(*),
          count(*) filter (where exists (select 1 from public.gioco_eventi e
-                                        where e.giocatore = x.id and e.mese = p_mese))
+                                        where e.giocatore = x.id and e.mese = p_mese and e.tipo <> 'tifo'))
     into v_devono, v_hanno
   from public.gioco_giocatori x
   where x.squadra = p_squadra and x.stato = 'attivo'
@@ -401,7 +436,8 @@ returns jsonb language sql stable set search_path = '' as $$
   select coalesce(jsonb_agg(b.mese order by b.mese), '[]'::jsonb)
   from public.gioco_boss b
   join public.gioco_giocatori x on x.id = p_giocatore and x.squadra = b.squadra
-  where exists (select 1 from public.gioco_eventi e where e.giocatore = p_giocatore and e.mese = b.mese)
+  where exists (select 1 from public.gioco_eventi e
+                where e.giocatore = p_giocatore and e.mese = b.mese and e.tipo <> 'tifo')
 $$;
 
 revoke all on function public.gioco_settimana(timestamptz), public.gioco_mese(timestamptz),
@@ -411,7 +447,7 @@ revoke all on function public.gioco_settimana(timestamptz), public.gioco_mese(ti
   public.gioco_danni(text, text), public.gioco_assicura_trii(text), public.gioco_trii_stato(text),
   public.gioco_boss_stato(text, text), public.gioco_bacheca(text), public.gioco_compagni(text),
   public.gioco_boss_vinti(uuid), public.gioco_giorno(timestamptz), public.gioco_sfida_settimana(text),
-  public.gioco_mese_settimana(text)
+  public.gioco_mese_settimana(text), public.gioco_missione_stato(text)
   from public, anon, authenticated;
 
 
@@ -545,13 +581,27 @@ begin
                    from public.gioco_trii_stato(g.squadra) s where s.giocatore = g.id and s.bonus),
     'boss_vinti', public.gioco_boss_vinti(g.id),
     'compagni', case when g.stato = 'attivo' then public.gioco_compagni(g.squadra) else '[]'::jsonb end,
+    -- dei compagni il ragazzo riceve solo «ha dato una mano» sì o no, mai quanti passi ha fatto ognuno
     'trio', case when v_grp is null then null else
               (select jsonb_agg(jsonb_build_object('id', s.giocatore, 'ha_sfida', s.ha_sfida, 'ha_stella', s.ha_stella,
-                                                   'bonus', s.bonus,
+                                                   'bonus', s.bonus, 'fatto', s.passi >= 1,
                                                    'gg_inviato', exists (select 1 from public.gioco_eventi e
                                                        where e.giocatore = g.id and e.settimana = w and e.tipo = 'gg'
                                                          and e.dati->>'a' = s.giocatore::text)))
-               from public.gioco_trii_stato(g.squadra) s where s.settimana = w and s.gruppo = v_grp) end,
+               from public.gioco_missione_stato(g.squadra) s where s.settimana = w and s.gruppo = v_grp) end,
+    'missione', case when v_grp is null then null else
+              (select jsonb_build_object('passi', max(s.totale), 'traguardo', max(s.traguardo),
+                                         'membri', max(s.membri), 'compiuta', bool_or(s.compiuta))
+               from public.gioco_missione_stato(g.squadra) s where s.settimana = w and s.gruppo = v_grp) end,
+    'tifo', case when v_grp is null then '[]'::jsonb else
+              (select coalesce(jsonb_agg(jsonb_build_object('id', e.id, 'da_id', x.id, 'da', x.soprannome,
+                                                            'frase', (e.dati->>'frase')::integer, 'creato', e.creato)
+                                         order by e.creato desc, e.id desc), '[]'::jsonb)
+               from public.gioco_eventi e
+               join public.gioco_trii t on t.squadra = e.squadra and t.settimana = e.settimana
+                                       and t.giocatore = e.giocatore and t.gruppo = v_grp
+               join public.gioco_giocatori x on x.id = e.giocatore and x.stato = 'attivo'
+               where e.squadra = g.squadra and e.settimana = w and e.tipo = 'tifo') end,
     'boss', v_boss,
     'bacheca', case when g.stato = 'attivo' then public.gioco_bacheca(g.squadra) else '[]'::jsonb end
   );
@@ -666,6 +716,23 @@ begin
     values (g.squadra, g.id, 'gg', jsonb_build_object('a', a, 'frase', (d->>'frase')::integer), 'ragazzo', w, m)
     returning id into nid;
 
+  elsif p_azione = 'tifo' then
+    -- una frase pronta per tutta la fantasquadra: al massimo tre a settimana, non dà trofei e non è un passo
+    if coalesce(d->>'frase', '') !~ '^[0-5]$' then return jsonb_build_object('errore', 'tifo'); end if;
+    if (select count(*) from public.gioco_trii t1
+        join public.gioco_trii t2 on t2.squadra = t1.squadra and t2.settimana = t1.settimana and t2.gruppo = t1.gruppo
+        join public.gioco_giocatori x on x.id = t2.giocatore and x.stato = 'attivo'
+        where t1.squadra = g.squadra and t1.settimana = w and t1.giocatore = g.id) < 2 then
+      return jsonb_build_object('errore', 'solo');
+    end if;
+    if (select count(*) from public.gioco_eventi e
+        where e.giocatore = g.id and e.settimana = w and e.tipo = 'tifo') >= 3 then
+      return jsonb_build_object('errore', 'troppo_tifo');
+    end if;
+    insert into public.gioco_eventi (squadra, giocatore, tipo, dati, autore, settimana, mese)
+    values (g.squadra, g.id, 'tifo', jsonb_build_object('frase', (d->>'frase')::integer), 'ragazzo', w, m)
+    returning id into nid;
+
   else
     return jsonb_build_object('errore', 'azione');
   end if;
@@ -713,8 +780,9 @@ begin
                from public.gioco_eventi e where e.squadra = p_squadra),
     'trii', (select coalesce(jsonb_agg(jsonb_build_object('settimana', t.settimana, 'gruppo', t.gruppo,
                                'giocatore', t.giocatore, 'ha_sfida', t.ha_sfida, 'ha_stella', t.ha_stella,
-                               'bonus', t.bonus)), '[]'::jsonb)
-             from public.gioco_trii_stato(p_squadra) t),
+                               'bonus', t.bonus, 'passi', t.passi, 'totale', t.totale,
+                               'traguardo', t.traguardo, 'compiuta', t.compiuta)), '[]'::jsonb)
+             from public.gioco_missione_stato(p_squadra) t),
     'boss', v_boss,
     'boss_vinti', (select coalesce(jsonb_agg(b.mese order by b.mese), '[]'::jsonb)
                    from public.gioco_boss b where b.squadra = p_squadra),
@@ -748,7 +816,7 @@ begin
     end if;
     insert into public.gioco_squadre (id, codice_invito, codice_mister, impostazioni)
     values (p_squadra, public.gioco_codice(6), public.gioco_codice(10),
-            jsonb_build_object('regole4', public.gioco_settimana()))
+            jsonb_build_object('regole4', public.gioco_settimana(), 'regole5', public.gioco_settimana()))
     on conflict (id) do nothing;
     return jsonb_build_object('ok', true);
   end if;
@@ -908,6 +976,13 @@ grant execute on function public.gioco_pubblico(text, text), public.gioco_iscriv
 update public.gioco_squadre
    set impostazioni = impostazioni || jsonb_build_object('regole4', public.gioco_settimana(now() + interval '7 days'))
  where not (impostazioni ? 'regole4');
+
+-- Passaggio alla versione 5. La missione di fantasquadra sostituisce il vecchio bonus dal
+-- lunedì dopo il primo lancio di questo file: i bonus già presi non cambiano. Rilanciare il
+-- file non sposta la data.
+update public.gioco_squadre
+   set impostazioni = impostazioni || jsonb_build_object('regole5', public.gioco_settimana(now() + interval '7 days'))
+ where not (impostazioni ? 'regole5');
 
 notify pgrst, 'reload schema';
 

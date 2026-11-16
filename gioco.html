@@ -400,6 +400,15 @@
   .pan.sett.fatta { background:#2c6a45; color:#fff; }
   .tessera .badge.nuova { background:var(--erba); }
   .aspetta { padding:10px 12px; border:3px dashed #b9a79a; border-radius:14px; background:#fff; margin:0 0 4px; }
+  /* versione 5: missione di fantasquadra (barra dei passi) e tifo */
+  .passi { position:relative; height:30px; background:#2a0b0a; border:3px solid var(--ink); border-radius:16px; overflow:hidden; margin:4px 0 8px; text-align:center; }
+  .passi i { position:absolute; inset:0 auto 0 0; background:linear-gradient(#b7a8ff,#8f79ff); box-shadow:inset 0 -5px 0 rgba(0,0,0,.18); }
+  .passi.fatta i { background:linear-gradient(#6fe39a,#43D17A); }
+  .passi span { position:relative; font-family:var(--display); font-size:16px; line-height:24px; color:#fff; text-shadow:0 2px 0 var(--ink); }
+  .app.entra .passi i { animation:riempi .9s .3s cubic-bezier(.3,.8,.3,1) both; }
+  .voce.tifo { align-items:center; padding:7px 0; }
+  .voce.tifo .mini { width:40px; height:40px; border-radius:12px; }
+  @media (prefers-reduced-motion: reduce) { .app.entra .passi i { animation:none !important; } }
   /* boss: fase e tacche a un quarto, metà, tre quarti */
   .fase { display:inline-block; font-family:var(--display); font-size:15px; padding:3px 10px; border-radius:10px; border:3px solid var(--ink); color:var(--ink); background:var(--gesso); margin:2px 0 4px; }
   .fase.f1 { background:#FFD23A; } .fase.f2 { background:#FF8A3D; } .fase.f3 { background:#FF4F5E; color:#fff; }
@@ -529,7 +538,10 @@ const sfidaSettimana = sett => SFIDA[SFIDA_GIRO[(+sett.slice(6)) % SFIDA_GIRO.le
 // scritta in impostazioni.regole4, cioè dal lunedì dopo il passaggio. Se manca non valgono ancora (come nel database).
 const R4_MAI = "9999-W99";
 let R4 = R4_MAI;
-const leggiR4 = r => { R4 = (r && r.squadra && r.squadra.impostazioni && r.squadra.impostazioni.regole4) || R4_MAI; };
+// regole della versione 5 (la missione di fantasquadra al posto del vecchio bonus): dalla settimana in impostazioni.regole5
+let R5 = R4_MAI;
+const regole5 = sett => sett >= R5;
+const leggiR4 = r => { const imp = (r && r.squadra && r.squadra.impostazioni) || {}; R4 = imp.regole4 || R4_MAI; R5 = imp.regole5 || R4_MAI; };
 // giorno della settimana a Roma, 1 lunedì … 7 domenica: lo dice il database (ora.giorno)
 const giornoSett = D => D.ora.giorno || (() => { try { return ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].indexOf(new Intl.DateTimeFormat("en-US", { timeZone:"Europe/Rome", weekday:"short" }).format(new Date(D.ora.adesso))) + 1; } catch (e) { return 7; } })();
 const regole4 = sett => sett >= R4;
@@ -556,6 +568,9 @@ const ESITI = [
   { k:"quasi",      nome:"Quasi",      msg:"Quasi è già tanto. La prossima settimana ci riprovi." },
   { k:"non_ancora", nome:"Non ancora", msg:"Hai fatto bene a dirlo: è così che si migliora. Riprova la prossima settimana." }
 ];
+// tifo: frasi pronte per tutta la fantasquadra (al massimo TIFO_MAX a settimana). Sono sei: l'indice è controllato in gioco_ragazzo().
+const TIFO_FRASI = ["Dai che ci siamo!", "Grande squadra!", "Io ci sono!", "Forza ragazzi!", "Che fantasquadra!", "Non molliamo!"];
+const TIFO_MAX = 3;
 const GG_FRASI = ["Mi hai incoraggiato", "Bel recupero!", "Che passaggio!", "Non hai mollato mai", "Grazie per l'aiuto", "Che coraggio!", "Bella mossa!", "Sei un vero compagno"];
 
 // trofei: gli stessi valori di gioco_danni() nel database
@@ -819,6 +834,9 @@ const ERRORI = {
   oggi:"L'obiettivo l'hai scelto oggi: prima provaci, da domani puoi dire com'è andata.",
   gia_inviato:"Gli hai già mandato un GG questa settimana.",
   compagno:"Puoi mandare il GG solo ai compagni della tua fantasquadra.",
+  tifo:"Scegli una delle frasi pronte.",
+  solo:"Questa settimana sei arrivato dopo il sorteggio: da lunedì avrai la tua fantasquadra.",
+  troppo_tifo:"Hai già fatto il tifo tre volte questa settimana.",
   chiave:"Password o codice non validi.",
   solo_dirigente:"Questo lo può fare solo il dirigente.",
   figlio:"Le stelle a tuo figlio le dà il mister.",
@@ -1494,6 +1512,8 @@ function traguardi() {
   const ss = regole4(w) ? sfidaSettimana(w) : null;
   if (ss && !fatte.some(e => e.dati.sfida === ss.k)) out.push(riga("sfide", stellaIco("#FFC531"), `Sfida della settimana: <b>${esc(ss.nome)}</b>, ${T.sfidaSett} trofei in più`));
   else if (fatte.length < T.sfidaMax) out.push(riga("sfide", ICONE.sfide, `Sfide a casa: ancora <b>${T.sfidaMax - fatte.length}</b> con i trofei questa settimana`));
+  const mis = regole5(w) && D.missione && (D.trio || []).length >= 2 ? D.missione : null;
+  if (mis && !mis.compiuta) { const n = mis.traguardo - mis.passi; out.push(riga("squadra", ICONE.squadra, `Missione di fantasquadra: ${n === 1 ? "manca" : "mancano"} <b>${n}</b> ${n === 1 ? "passo" : "passi"}`)); }
   const daGG = (D.trio || []).filter(m => m.id !== D.io.id && !m.gg_inviato).length;
   if (daGG) out.push(riga("squadra", `<span class="pallino" style="background:var(--squadra)">GG</span>`, `Hai <b>${daGG}</b> GG da mandare alla tua fantasquadra`));
   if (D.boss && !D.boss.sconfitto && !mieiDanni(D)) out.push(riga("squadra", ICONE.mosse, `Il boss di ${nomeMese(D.boss.mese)} aspetta il tuo primo colpo`));
@@ -1587,21 +1607,36 @@ function tSquadra() {
       ${premio ? `<p style="margin:8px 0 0"><span class="area-chip" style="background:var(--erba)">Premio</span> ${esc(premio)}</p>` : ""}
     </section>`;
   }
-  // fantasquadra
-  h += `<section class="pan"><h3>La tua fantasquadra della settimana</h3>`;
+  // fantasquadra: dalla versione 5 ha una missione comune, i passi di squadra
+  const M = regole5(w) && D.missione ? D.missione : null;
+  h += `<section class="pan fanta"><h3>${M ? "Missione di fantasquadra" : "La tua fantasquadra della settimana"}</h3>`;
   if (!D.trio || D.trio.length < 2) {
     h += `<p class="fioco" style="margin:0">Il sorteggio della fantasquadra arriva lunedì: ti toccheranno due o tre compagni.</p>`;
   } else {
-    const bonus = D.trio.every(x => x.bonus);
-    h += `<p class="fioco">Bonus di ${T.trio} trofei a testa se tutti fate almeno una sfida a casa e prendete almeno una stella. Si cambia ogni lunedì.</p>`;
-    for (const m of D.trio) {
-      const x = comp[m.id] || { soprannome:"?", avatar:{} }, io = m.id === D.io.id;
-      h += `<div class="voce" style="align-items:center"><div class="mini">${fighterSVG(x.avatar, { busto:true })}</div>
-        <div style="flex:1"><div class="d-s" style="font-size:18px">${esc(io ? "Tu" : x.soprannome)}</div>
-        <div class="piccolo"><span style="color:${m.ha_sfida ? "var(--erba)" : "var(--dim)"}">${m.ha_sfida ? "✓" : "○"} sfida</span> &nbsp; <span style="color:${m.ha_stella ? "var(--erba)" : "var(--dim)"}">${m.ha_stella ? "✓" : "○"} stella</span></div></div>
-        ${io ? "" : m.gg_inviato ? `<span class="area-chip" style="background:var(--erba)">GG inviato</span>` : `<button class="btn piccolo" data-act="gg" data-id="${m.id}">Manda GG</button>`}</div>`;
+    const riga = (m, sotto) => { const x = comp[m.id] || { soprannome:"?", avatar:{} }, io = m.id === D.io.id;
+      return `<div class="voce" style="align-items:center"><div class="mini">${fighterSVG(x.avatar, { busto:true })}</div>
+        <div style="flex:1"><div class="d-s" style="font-size:18px">${esc(io ? "Tu" : x.soprannome)}</div><div class="piccolo">${sotto(m, io)}</div></div>
+        ${io ? "" : m.gg_inviato ? `<span class="area-chip" style="background:var(--erba)">GG inviato</span>` : `<button class="btn piccolo" data-act="gg" data-id="${m.id}">Manda GG</button>`}</div>`; };
+    if (M) {
+      const manca = Math.max(0, M.traguardo - M.passi);
+      h += `<p class="fioco">Ogni <b>sfida a casa</b> (le prime ${T.sfidaMax}), ogni <b>stella</b> del mister e ogni <b>GG</b> che mandi è un passo della squadra. Al traguardo: ${T.trio} trofei a chi ha dato una mano. Si cambia ogni lunedì.</p>
+        <div class="passi${M.compiuta ? " fatta" : ""}" role="progressbar" aria-valuemin="0" aria-valuemax="${M.traguardo}" aria-valuenow="${Math.min(M.passi, M.traguardo)}"><i style="width:${Math.round(Math.min(1, M.passi / M.traguardo) * 100)}%"></i><span>${M.compiuta ? "Missione compiuta!" : `${M.passi} passi su ${M.traguardo}`}</span></div>
+        <p class="piccolo" style="margin:0 0 4px">${M.compiuta ? `Ce l'avete fatta insieme: +${T.trio} trofei a chi ha dato una mano.` : `${manca === 1 ? "Manca <b>1</b> passo" : `Mancano <b>${manca}</b> passi`}: li fate insieme, conta quello di tutti.`}</p>`;
+      for (const m of D.trio) h += riga(m, (m, io) => m.fatto ? `<span style="color:var(--erba)">✓ ${io ? "hai" : "ha"} dato una mano</span>` : `<span style="color:var(--dim)">○ ${io ? "fai il tuo primo passo" : "non ancora"}</span>`);
+    } else {
+      const bonus = D.trio.every(x => x.bonus);
+      h += `<p class="fioco">Bonus di ${T.trio} trofei a testa se tutti fate almeno una sfida a casa e prendete almeno una stella. Si cambia ogni lunedì.</p>`;
+      for (const m of D.trio) h += riga(m, m => `<span style="color:${m.ha_sfida ? "var(--erba)" : "var(--dim)"}">${m.ha_sfida ? "✓" : "○"} sfida</span> &nbsp; <span style="color:${m.ha_stella ? "var(--erba)" : "var(--dim)"}">${m.ha_stella ? "✓" : "○"} stella</span>`);
+      h += bonus ? `<div class="data-presa" style="margin-top:8px;color:#1E0B0A"><b>Bonus preso!</b> +${T.trio} trofei a testa.</div>` : "";
+      if (R5 !== R4_MAI) h += `<p class="fioco piccolo" style="margin:8px 0 0">Da lunedì la fantasquadra ha una missione comune: i passi di squadra.</p>`;
     }
-    h += bonus ? `<div class="data-presa" style="margin-top:8px;color:#1E0B0A"><b>Bonus preso!</b> +${T.trio} trofei a testa.</div>` : "";
+    // tifo: frasi pronte per tutta la fantasquadra (arriva solo se il database è aggiornato)
+    if (D.tifo) {
+      const miei = D.tifo.filter(t => t.da_id === D.io.id).length;
+      h += `<div class="sep"></div><div class="riga sp" style="margin:0 0 4px"><h3 style="margin:0">Tifo</h3>${miei < TIFO_MAX ? `<button class="btn piccolo bianco" data-act="tifo">Fai il tifo</button>` : `<span class="fioco piccolo">${TIFO_MAX} su ${TIFO_MAX} questa settimana</span>`}</div>`;
+      h += D.tifo.length ? D.tifo.slice(0, 6).map(t => `<div class="voce tifo"><div class="mini">${fighterSVG((comp[t.da_id] || {}).avatar, { busto:true })}</div><div><b>${esc(t.da_id === D.io.id ? "Tu" : t.da)}</b>: ${esc(TIFO_FRASI[t.frase] || "")}<div class="fioco piccolo">${quando(t.creato)}</div></div></div>`).join("")
+        : `<p class="fioco piccolo" style="margin:0">Ancora nessuno. Manda una frase a tutta la fantasquadra: la leggono i tuoi compagni di questa settimana.</p>`;
+    }
   }
   h += `</section>`;
   // GG ricevuti
@@ -1619,13 +1654,13 @@ function tSquadra() {
   return h;
 }
 function bacheca(lista) {
-  if (!lista || !lista.length) return `<p class="fioco" style="margin:0">Qui compaiono mosse sbloccate, Green Card, nuovi arrivi, fantasquadre col bonus e boss sconfitti.</p>`;
+  if (!lista || !lista.length) return `<p class="fioco" style="margin:0">Qui compaiono mosse sbloccate, Green Card, nuovi arrivi, missioni di fantasquadra compiute e boss sconfitti.</p>`;
   return lista.slice(0, 15).map(b => {
     let t = "", col = "var(--oro)", ic = "★";
     if (b.tipo === "mossa") { t = `<b>${esc(b.chi)}</b> ha sbloccato la mossa <b>${esc((MOSSA[b.mossa] || {}).nome || b.mossa)}</b>`; col = "var(--cielo)"; ic = "M"; }
     else if (b.tipo === "greencard") { t = `<b>${esc(b.chi)}</b> ha preso una Green Card per il fair play`; col = "var(--erba)"; ic = "G"; }
     else if (b.tipo === "nuovo") { t = `Benvenuto <b>${esc(b.chi)}</b>!`; col = "var(--gesso)"; ic = "+"; }
-    else if (b.tipo === "trio") { t = `Bonus fantasquadra per <b>${(b.chi || []).map(esc).join(", ")}</b>`; col = "var(--squadra)"; ic = "3"; }
+    else if (b.tipo === "trio") { t = `${b.settimana && regole5(b.settimana) ? "Missione di fantasquadra compiuta da" : "Bonus fantasquadra per"} <b>${(b.chi || []).map(esc).join(", ")}</b>`; col = "var(--squadra)"; ic = "3"; }
     else if (b.tipo === "boss") { t = `Boss di ${nomeMese(b.mese)} sconfitto da tutta la squadra!`; col = "var(--coraggio)"; ic = "!"; }
     return `<div class="voce"><span class="pallino" style="background:${col}">${ic}</span><div>${t}<div class="fioco piccolo">${quando(b.quando)}</div></div></div>`;
   }).join("");
@@ -1661,7 +1696,7 @@ function tStrada() {
     <div class="voce"><b>${T.autoval}</b>&nbsp;autovalutazione del tuo obiettivo</div>
     <div class="voce"><b>${T.ggDato}</b>&nbsp;GG mandato a un compagno</div>
     <div class="voce"><b>${T.ggRicevuto}</b>&nbsp;GG ricevuto</div>
-    <div class="voce"><b>${T.trio}</b>&nbsp;bonus della fantasquadra</div>
+    <div class="voce"><b>${T.trio}</b>&nbsp;${regole5(S.io.ora.settimana) ? "missione di fantasquadra compiuta, a chi ha dato una mano" : "bonus della fantasquadra"}</div>
     <div class="voce"><b>${T.boss}</b>&nbsp;boss del mese sconfitto</div>
     <div class="voce"><b>${T.greencard}</b>&nbsp;Green Card per il fair play</div>
     <p class="fioco piccolo" style="margin:8px 0 0">Gol, vittorie e minuti giocati non contano: conta quello che fai tu.</p></section>`;
@@ -1706,6 +1741,10 @@ function grafico(s, valori, record) {
     ${v.map((x, i) => `<circle cx="${X(i)}" cy="${Y(x)}" r="${i === iTop ? 7 : 4.5}" fill="${i === iTop ? "#FFC531" : "#fff"}" stroke="#1E0B0A" stroke-width="2.5"/>`).join("")}
   </svg><div class="riga sp piccolo fioco"><span>${valori.length > 12 ? "12 volte fa" : "Prima volta"}: ${fmtVal(v[0], s.unita)}</span><span>Record: <b>${fmtVal(record != null ? record : top, s.unita)}</b></span></div></div>`;
 }
+function fTifo() {
+  const miei = (S.io.tifo || []).filter(t => t.da_id === S.io.io.id).length;
+  apri(() => `<button class="chiudi" data-act="chiudi" aria-label="Chiudi">✕</button><h2>Fai il tifo</h2><p class="fioco">La frase arriva a tutta la tua fantasquadra. Te ne ${TIFO_MAX - miei === 1 ? "resta 1" : "restano " + (TIFO_MAX - miei)} questa settimana.</p>${TIFO_FRASI.map((f, i) => `<button class="frase" data-act="mandaTifo" data-f="${i}">${esc(f)}</button>`).join("")}`);
+}
 function fGG(id) {
   const x = (S.io.compagni || []).find(c => c.id === id) || { soprannome:"" };
   apri(() => `<button class="chiudi" data-act="chiudi" aria-label="Chiudi">✕</button><h2>GG a ${esc(x.soprannome)}</h2><p class="fioco">Scegli la frase che gli vuoi mandare.</p>${GG_FRASI.map((f, i) => `<button class="frase" data-act="mandaGG" data-id="${id}" data-f="${i}">${esc(f)}</button>`).join("")}`);
@@ -1737,7 +1776,7 @@ function datiStaff() {
   for (const g of D.giocatori) per[g.id] = { ev:[], gg:[], bonus:[], boss:[] };
   for (const e of D.eventi) { if (per[e.giocatore]) per[e.giocatore].ev.push(e); if (e.tipo === "gg" && per[e.dati.a]) per[e.dati.a].gg.push(e); }
   for (const t of D.trii) if (t.bonus && per[t.giocatore] && !per[t.giocatore].bonus.includes(t.settimana)) per[t.giocatore].bonus.push(t.settimana);
-  for (const m of D.boss_vinti) for (const id in per) if (per[id].ev.some(e => e.mese === m)) per[id].boss.push(m);
+  for (const m of D.boss_vinti) for (const id in per) if (per[id].ev.some(e => e.mese === m && e.tipo !== "tifo")) per[id].boss.push(m);
   const calc = {};
   for (const id in per) calc[id] = calcola(per[id].ev, per[id].gg, per[id].bonus, per[id].boss);
   return { w, attivi, per, calc };
@@ -1865,8 +1904,9 @@ function sSquadra(X) {
   const tr = D.trii.filter(t => t.settimana === X.w), grp = {};
   for (const t of tr) (grp[t.gruppo] = grp[t.gruppo] || []).push(t);
   const nomeDi = id => (D.giocatori.find(g => g.id === id) || {}).nome || "?";
-  h += `<section class="pan"><h3>Fantasquadre della settimana</h3>${Object.keys(grp).length ? Object.values(grp).map(g => `<div class="voce"><span class="pallino" style="background:${g.every(x => x.bonus) ? "var(--erba)" : "var(--gesso)"}">${g.every(x => x.bonus) ? "✓" : g.length}</span><div>${g.map(x => `${esc(nomeDi(x.giocatore))} <span class="fioco piccolo">${x.ha_sfida ? "S" : "·"}${x.ha_stella ? "★" : "·"}</span>`).join(", ")}</div></div>`).join("") : `<p class="fioco" style="margin:0">Il sorteggio parte quando c'è almeno un ragazzo in squadra.</p>`}
-    <p class="fioco piccolo" style="margin:8px 0 0">S = sfida a casa fatta, ★ = stella presa. Il sorteggio cambia ogni lunedì da solo.</p></section>`;
+  const passi = regole5(X.w) && tr.some(t => t.traguardo != null);     // versione 5: missione a passi
+  h += `<section class="pan"><h3>Fantasquadre della settimana</h3>${Object.keys(grp).length ? Object.values(grp).map(g => `<div class="voce"><span class="pallino" style="background:${gruppoFatto(g) ? "var(--erba)" : "var(--gesso)"}">${gruppoFatto(g) ? "✓" : g.length}</span><div>${passi && g.length >= 2 ? `<b>${g[0].totale} passi su ${g[0].traguardo}</b><br>` : ""}${g.map(x => `${esc(nomeDi(x.giocatore))} <span class="fioco piccolo">${passi ? x.passi : (x.ha_sfida ? "S" : "·") + (x.ha_stella ? "★" : "·")}</span>`).join(", ")}</div></div>`).join("") : `<p class="fioco" style="margin:0">Il sorteggio parte quando c'è almeno un ragazzo in squadra.</p>`}
+    <p class="fioco piccolo" style="margin:8px 0 0">${passi ? "Missione di fantasquadra: un passo per ogni sfida a casa (le prime 3), stella e GG mandato; traguardo 4 passi a testa. Il numero accanto al nome sono i passi di ognuno: lo vedete solo voi, i ragazzi vedono il totale e chi ha dato una mano." : "S = sfida a casa fatta, ★ = stella presa."} Il sorteggio cambia ogni lunedì da solo.</p></section>`;
   if (!dir) {
     h += `<section class="pan"><h3>Ragazzi</h3>${X.attivi.map(g => `<div class="voce" style="align-items:center"><div class="mini">${fighterSVG(g.avatar, { busto:true })}</div><div style="flex:1"><b>${esc(g.nome)}</b><div class="fioco piccolo">${X.calc[g.id].grado.nome} · ${X.calc[g.id].trofei} trofei</div></div></div>`).join("") || `<p class="vuoto">Nessuno.</p>`}</section>`;
     return h;
@@ -1905,6 +1945,8 @@ function fGestisci(id) {
     <button class="btn piccolo rosso" data-act="elimina" data-id="${id}" data-conferma="Eliminare ${esc(g.nome)} e tutti i suoi dati? Non si può tornare indietro.">Elimina</button></div>`);
 }
 
+// fantasquadra che ha compiuto la missione (o, nelle settimane prima della versione 5, preso il bonus)
+const gruppoFatto = g => g[0].compiuta != null ? !!g[0].compiuta : g.every(x => x.bonus);
 /* ---------- riepilogo settimanale (immagine) ---------- */
 function datiRiep() {
   const D = S.staff, w = S.rsett === 0 ? D.ora.settimana : spostaSett(D.ora.settimana, -1);
@@ -1917,7 +1959,7 @@ function datiRiep() {
   const prossima = areaMissione(spostaSett(w, 1));
   const b = bossDelMese(D.boss.mese, D.squadra.impostazioni), quota = Math.max(0, 1 - D.boss.danni / D.boss.hp);
   return { w, stelle:conta("stella"), sfide:conta("sfida"), gg:conta("gg"), mosse:conta("mossa"), gc:conta("greencard"),
-           trii:gruppi.filter(g => g.every(x => x.bonus)).length, triiTot:gruppi.length, conStella:bambini, attivi:D.giocatori.filter(g => g.stato === "attivo").length,
+           trii:gruppi.filter(gruppoFatto).length, triiTot:gruppi.length, missione:regole5(w), conStella:bambini, attivi:D.giocatori.filter(g => g.stato === "attivo").length,
            prossima, boss:b, quota, vinto:!!D.boss.sconfitto, premio:premioDelMese(D.boss.mese, D.squadra.impostazioni) };
 }
 let logoImg = null;
@@ -1936,7 +1978,7 @@ async function disegnaRiep() {
   x.font = `800 30px ${TXT}`; x.fillStyle = "#E2BDB4"; x.textAlign = "left"; x.fillText(`Annata ${SQ} · settimana ${etichettaSett(R.w)}`, 188, 156);
   const box = (X, Y, w, h, fill) => { x.fillStyle = "#1E0B0A"; rr(X, Y + 8, w, h, 30); x.fill(); x.fillStyle = fill; rr(X, Y, w, h, 30); x.fill(); x.lineWidth = 6; x.strokeStyle = "#1E0B0A"; rr(X, Y, w, h, 30); x.stroke(); };
   function rr(X, Y, w, h, r) { x.beginPath(); x.moveTo(X + r, Y); x.arcTo(X + w, Y, X + w, Y + h, r); x.arcTo(X + w, Y + h, X, Y + h, r); x.arcTo(X, Y + h, X, Y, r); x.arcTo(X, Y, X + w, Y, r); x.closePath(); }
-  const tiles = [[R.stelle, "stelle del mister", "#FFC531"], [R.sfide, "sfide a casa", "#57C7FF"], [R.gg, "GG tra compagni", "#9B87FF"], [`${R.trii}/${R.triiTot || 0}`, "fantasquadre col bonus", "#43D17A"]];
+  const tiles = [[R.stelle, "stelle del mister", "#FFC531"], [R.sfide, "sfide a casa", "#57C7FF"], [R.gg, "GG tra compagni", "#9B87FF"], [`${R.trii}/${R.triiTot || 0}`, R.missione ? "missioni di fantasquadra" : "fantasquadre col bonus", "#43D17A"]];
   tiles.forEach(([n, l, c], i) => {
     const X = 60 + (i % 2) * 490, Y = 210 + Math.floor(i / 2) * 250;
     box(X, Y, 470, 220, "#5A1A16");
@@ -1968,7 +2010,7 @@ function wrapTesto(x, t, X, Y, maxW, lh, maxRighe) {
 function testoRiep() {
   const R = datiRiep(), mis = S.rsett === 0 ? R.prossima : areaMissione(S.staff.ora.settimana);
   return `⚽ ${nomeGioco(S.staff.squadra.impostazioni)} — settimana ${etichettaSett(R.w)}\n` +
-    `⭐ ${R.stelle} stelle del mister\n🏠 ${R.sfide} sfide a casa\n🤝 ${R.gg} GG tra compagni\n👥 ${R.trii} fantasquadre su ${R.triiTot} col bonus\n` +
+    `⭐ ${R.stelle} stelle del mister\n🏠 ${R.sfide} sfide a casa\n🤝 ${R.gg} GG tra compagni\n👥 ${R.trii} fantasquadre su ${R.triiTot} ${R.missione ? "con la missione compiuta" : "col bonus"}\n` +
     `👾 Boss ${R.boss.nome}: ${R.vinto ? "sconfitto!" : "energia " + Math.round(R.quota * 100) + "%"}${R.premio ? " (premio: " + R.premio + ")" : ""}\n` +
     `🎯 ${S.rsett === 0 ? "Missione della prossima settimana" : "Missione"}: ${mis.missione} — ${mis.testo}`;
 }
@@ -2079,6 +2121,21 @@ function festaCresciuto(trofeiPrima) {
     <div class="elenco-festa">${voce("var(--cielo)", "M", "<b>Il tuo Fighter fa le mosse</b> che hai sbloccato: guardale nei Trofei.")}${voce("var(--oro)", "★", "<b>Medaglie</b> per le sfide a casa: bronzo, argento e oro.")}${voce("var(--erba)", "+", "<b>Esultanze</b> e tanti premi nuovi sulla strada dei trofei.")}${voce("var(--coraggio)", "!", "<b>Il boss</b> cambia faccia quando lo colpite.")}</div>
     ${retro.length ? `<p style="margin:0"><b>Con i trofei che hai già, questi sono tuoi:</b></p>${tesserePremi(retro)}<p class="fioco piccolo">Li trovi in Personalizza.</p>` : ""}<button class="btn pieno" data-act="chiudiFesta">Vediamo!</button>`;
 }
+// la fantasquadra è arrivata al traguardo (o, per le settimane di prima, ha preso il bonus)
+function festaMissione(sett) {
+  const D = S.io, qui = sett === D.ora.settimana, comp = Object.fromEntries((D.compagni || []).map(x => [x.id, x]));
+  const facce = qui && D.trio ? `<div class="riga" style="justify-content:center;gap:8px;margin:10px 0">${D.trio.filter(m => m.bonus).map(m => `<div class="mini g">${fighterSVG((comp[m.id] || {}).avatar, { busto:true })}</div>`).join("")}</div>` : "";
+  return raggi + coriandoli() + `<span class="sopra">Fantasquadra</span><h2 class="d titolo-festa" style="font-size:36px">${regole5(sett) ? "Missione compiuta!" : "Bonus preso!"}</h2>${facce}
+    <p style="margin:0 0 8px">${regole5(sett) ? "Siete arrivati al traguardo <b>insieme</b>: un passo alla volta, ognuno il suo." : "Tutti avete fatto una sfida e preso una stella."}</p>
+    <div class="guadagno">+${T.trio} ${coppa(24)}</div><button class="btn pieno" data-act="chiudiFesta">Grande!</button>`;
+}
+function festaMissioneNuova() {
+  const voce = (col, ic, t) => `<div class="voce" style="text-align:left"><span class="pallino" style="background:${col}">${ic}</span><div>${t}</div></div>`;
+  const ora = regole5(S.io.ora.settimana);
+  return raggi + `<span class="sopra">Novità nel gioco</span><h2 class="d titolo-festa" style="font-size:30px">Missione di fantasquadra</h2>
+    <div class="elenco-festa">${voce("var(--squadra)", "3", `<b>Una missione in comune</b>${ora ? "" : ", da lunedì"}: con i compagni della fantasquadra dovete fare un certo numero di passi.`)}${voce("var(--erba)", "+1", "<b>Un passo</b> per ogni sfida a casa, ogni stella del mister e ogni GG che mandi.")}${voce("var(--oro)", "!", "<b>Tifo</b>: manda una frase a tutta la fantasquadra. La trovi nella pagina Squadra.")}</div>
+    <button class="btn pieno" data-act="chiudiFesta">Vediamo!</button>`;
+}
 function festaSfideNuove() {
   const voce = (col, ic, t) => `<div class="voce" style="text-align:left"><span class="pallino" style="background:${col}">${ic}</span><div>${t}</div></div>`;
   const w = S.io.ora.settimana;
@@ -2098,16 +2155,21 @@ function salita(x, lv) {
 /* ---------- novità e sblocchi (all'apertura) ---------- */
 function novita() {
   const D = S.io, id = D.io.id, k = "ngu:visto:" + id, v = lgetJ(k, null);
-  const maxEv = Math.max(0, ...D.eventi.map(e => e.id), ...(D.gg_ricevuti || []).map(e => e.id));
+  const maxEv = Math.max(0, ...D.eventi.map(e => e.id), ...(D.gg_ricevuti || []).map(e => e.id), ...(D.tifo || []).map(e => e.id));
+  const trioOra = D.bonus_trio || [];
   const lvOra = Object.fromEntries(Object.entries(S.c.st).map(([n, s]) => [n, s.lv])), bossOra = D.boss_vinti || [];
   const apertura = !V.aperto; V.aperto = true;
-  const salva = () => lset(k, JSON.stringify({ trofei:S.c.trofei, ev:maxEv, lv:lvOra, boss:bossOra }));
-  if (!v) { salva(); lset("ngu:v3:" + id, "1"); lset("ngu:v4:" + id, "1"); return; }
+  const salva = () => lset(k, JSON.stringify({ trofei:S.c.trofei, ev:maxEv, lv:lvOra, boss:bossOra, trio:trioOra }));
+  if (!v) { salva(); lset("ngu:v3:" + id, "1"); lset("ngu:v4:" + id, "1"); lset("ngu:v5:" + id, "1"); return; }
   const nuoveStelle = D.eventi.filter(e => e.id > v.ev && (e.tipo === "stella" || e.tipo === "mossa" || e.tipo === "greencard" || e.tipo === "combine"));
   const nuoviGG = (D.gg_ricevuti || []).filter(e => e.id > v.ev);
   const tappe = STRADA.filter(tp => tp.t > v.trofei && tp.t <= S.c.trofei);
   const saliti = v.lv ? [...AREE, ...PIEDI].filter(x => lvOra[x.k] > (v.lv[x.k] || 1)) : [];
   const bossNuovi = v.boss ? bossOra.filter(m => !v.boss.includes(m)) : [];
+  const nuovoTifo = (D.tifo || []).filter(e => e.id > v.ev && e.da_id !== id);
+  const missioni = v.trio ? trioOra.filter(s => !v.trio.includes(s)) : [];     // fantasquadre arrivate al traguardo da quando non guardava
+  const missioneNuova = !lget("ngu:v5:" + id);  // giocava già prima della versione 5
+  if (missioneNuova) lset("ngu:v5:" + id, "1");
   const cresciuto = !lget("ngu:v3:" + id);      // giocava già prima della versione 3
   if (cresciuto) lset("ngu:v3:" + id, "1");
   const sfideNuove = !lget("ngu:v4:" + id);     // giocava già prima della versione 4
@@ -2116,7 +2178,7 @@ function novita() {
   // mentre si gioca i livelli nuovi sono un avviso piccolo; all'apertura entrano nell'elenco delle novità
   if (!apertura) saliti.forEach(x => salita(x, lvOra[x.k]));
   const livelli = apertura ? saliti : [];
-  if (!nuoveStelle.length && !nuoviGG.length && !tappe.length && !livelli.length && !bossNuovi.length && !cresciuto && !sfideNuove) return;
+  if (!nuoveStelle.length && !nuoviGG.length && !tappe.length && !livelli.length && !bossNuovi.length && !cresciuto && !sfideNuove && !nuovoTifo.length && !missioni.length && !missioneNuova) return;
   const righe = [];
   for (const e of nuoveStelle) {
     if (e.tipo === "stella") { const a = AREA[e.dati.area], f = (FRASI[e.dati.area] || [])[e.dati.frase]; righe.push(`<div class="voce" style="text-align:left">${stellaIco(a.col)}<div><b style="color:${a.col}">Stella ${a.nome.toLowerCase()}</b><div>${esc(f ? f.k : "")}</div></div></div>`); }
@@ -2125,8 +2187,11 @@ function novita() {
     else righe.push(`<div class="voce" style="text-align:left"><span class="pallino" style="background:var(--erba)">G</span><div><b>Green Card!</b> Un gesto di fair play che vale ${T.greencard} trofei.</div></div>`);
   }
   for (const g of nuoviGG) righe.push(`<div class="voce" style="text-align:left"><span class="pallino" style="background:var(--squadra)">GG</span><div><b>${esc(g.da)}</b>: ${esc(GG_FRASI[g.dati.frase] || "")}</div></div>`);
+  for (const t of nuovoTifo) righe.push(`<div class="voce" style="text-align:left"><span class="pallino" style="background:var(--oro)">!</span><div><b>${esc(t.da)}</b> fa il tifo: ${esc(TIFO_FRASI[t.frase] || "")}</div></div>`);
   for (const x of livelli) righe.push(`<div class="voce" style="text-align:left"><span class="pallino" style="background:${x.col}">▲</span><div><b>${x.nome}: livello ${lvOra[x.k]}</b>${lvOra[x.k] >= 5 && (v.lv[x.k] || 1) < 5 ? `<div>Nuovo titolo: «${esc(TITOLI_STAT[x.k])}»</div>` : ""}</div></div>`);
   const pagine = [];
+  // la missione di fantasquadra compiuta ha la sua schermata
+  if (missioni.length) pagine.push({ html:festaMissione(missioni[missioni.length - 1]), suono:"fanfara" });
   // il boss battuto ha la sua schermata
   if (bossNuovi.length) pagine.push({ html:festaBoss(bossNuovi[bossNuovi.length - 1]), suono:"fanfara" });
   // un grado nuovo ha la sua schermata; gli altri premi vanno nella schermata "Sbloccato!"
@@ -2141,11 +2206,12 @@ function novita() {
   else if (righe.length) pagine.push({ html:`<h2 class="d titolo-festa" style="font-size:32px">Novità per te</h2>${elenco}<button class="btn pieno" data-act="chiudiFesta">Grande!</button>`, suono:"stelle" });
   if (cresciuto) pagine.push({ html:festaCresciuto(v.trofei), suono:"fanfara" });
   if (sfideNuove) pagine.push({ html:festaSfideNuove(), suono:"fanfara" });
+  if (missioneNuova) pagine.push({ html:festaMissioneNuova(), suono:"fanfara" });
   // all'apertura il telefono non lascia suonare finché non lo tocchi: prima un "Vediamo!"
   if (SUONI.acceso() && !SUONI.pronto()) {
     const n = t => nuoveStelle.filter(e => e.tipo === t).length;
-    const voci = [[n("stella"), "stella", "stelle"], [n("mossa"), "mossa", "mosse"], [n("greencard"), "Green Card", "Green Card"], [nuoviGG.length, "GG", "GG"], [tappe.reduce((x, tp) => x + tp.premi.length, 0), "premio", "premi"], [bossNuovi.length ? 1 : 0, "boss battuto", "boss battuto"]]
-      .filter(x => x[0]).map(([q, uno, tanti]) => `<span>${q} ${q === 1 ? uno : tanti}</span>`).join("") + (cresciuto || sfideNuove ? `<span>gioco nuovo</span>` : "");
+    const voci = [[n("stella"), "stella", "stelle"], [n("mossa"), "mossa", "mosse"], [n("greencard"), "Green Card", "Green Card"], [nuoviGG.length, "GG", "GG"], [tappe.reduce((x, tp) => x + tp.premi.length, 0), "premio", "premi"], [bossNuovi.length ? 1 : 0, "boss battuto", "boss battuto"], [missioni.length ? 1 : 0, "missione compiuta", "missione compiuta"], [nuovoTifo.length, "tifo", "tifo"]]
+      .filter(x => x[0]).map(([q, uno, tanti]) => `<span>${q} ${q === 1 ? uno : tanti}</span>`).join("") + (cresciuto || sfideNuove || missioneNuova ? `<span>gioco nuovo</span>` : "");
     pagine.unshift({ html:`<h2 class="d titolo-festa" style="font-size:34px">Ci sono novità!</h2><div class="riassunto">${voci}</div><button class="btn pieno" data-act="chiudiFesta">Vediamo!</button>` });
   }
   pagine.forEach(p => festa(p.html, p.suono));
@@ -2359,6 +2425,8 @@ const ACT = {
   cambiaObiettivo:async () => { S.io.eventi = S.io.eventi.filter(e => !(e.tipo === "obiettivo" && e.settimana === S.io.ora.settimana)); render(); },
   autoval:async d => { try { await azioneRagazzo("autovalutazione", { esito:d.k }); await caricaRagazzo(); toast("+" + T.autoval + " trofei per esserti autovalutato"); } catch (e) { toast(msgErr(e.message)); } },
   gg:d => fGG(d.id),
+  tifo:() => fTifo(),
+  mandaTifo:async d => { try { await azioneRagazzo("tifo", { frase:+d.f }); chiudi(); SUONI.suona("gg"); toast("Tifo mandato alla fantasquadra!"); await caricaRagazzo(); } catch (e) { toast(msgErr(e.message)); } },
   mandaGG:async d => { try { await azioneRagazzo("gg", { a:d.id, frase:+d.f }); chiudi(); SUONI.suona("gg"); toast("GG mandato!"); await caricaRagazzo(); } catch (e) { toast(msgErr(e.message)); } },
   mossa:d => fMossa(d.k),
   // staff
